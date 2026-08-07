@@ -278,27 +278,30 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 <script>
 'use strict';
 // ─── Config ───────────────────────────────────────────────────────────────
-const ROOT_LEAGUE_ID = '1389348066355609601'; // current / most-recent season
-const API            = 'https://api.sleeper.app/v1';
-const AR_INTERVAL_MS = 5 * 60 * 1000;         // auto-refresh every 5 min
+const ROOT_LEAGUE_ID       = '1389348066355609601';
+const API                  = 'https://api.sleeper.app/v1';
+const AR_INTERVAL_MS       = 5 * 60 * 1000;  // auto-refresh every 5 min
+const REGULAR_SEASON_WEEKS = 14;              // weeks 1–14 are regular season
+const DH_WEEKS             = [2, 3, 13, 14];  // weeks that have a double header
+const PLAYOFF_CUTOFF       = 4;              // top 4 teams make playoffs
 
 // ─── State ────────────────────────────────────────────────────────────────
 const S = {
   seasons: [],       // [{id, season, name, league}] newest-first
-  seasonIdx: 0,      // index into S.seasons for currently-displayed season
+  seasonIdx: 0,
   league: null,
   users: [],
   rosters: [],
-  userMap:   {},     // user_id   → display_name
-  rosterMap: {},     // roster_id → display_name
-  dh: {},            // double_headers.json (current season only)
+  userMap:   {},
+  rosterMap: {},
   currentWeek: 1,
   selectedWeek: 1,
   activeTab: 'matchups',
   weekCache: {},     // `${leagueId}:${week}` → {matchups, stats}
-  allLoadedFor: '',  // leagueId whose all-weeks are fully cached
-  playersCache: null,// cached GET /players/nfl response
-  // Auto-refresh
+  schedCache: {},    // `${leagueId}:sched:${week}` → [matchup,...] (structure only)
+  dhMatchups: null,  // null = not computed; {2:[{r1,r2}],...} when computed
+  allLoadedFor: '',
+  playersCache: null,
   arEnabled: true,
   arTimer: null,
   arCountTimer: null,
@@ -343,12 +346,8 @@ function buildSeasonPicker(seasons) {
 async function init() {
   try {
     setLoading('Loading league data…');
-    const [seasons, dh] = await Promise.all([
-      walkSeasonChain(),
-      fetchJ('./double_headers.json').catch(() => ({})),
-    ]);
+    const seasons = await walkSeasonChain();
     S.seasons = seasons;
-    S.dh = dh || {};
     buildSeasonPicker(seasons);
     await loadSeason(0);
   } catch(e) {
@@ -360,6 +359,8 @@ async function init() {
 async function loadSeason(idx) {
   S.seasonIdx    = idx;
   S.allLoadedFor = '';
+  S.dhMatchups   = null;  // recompute for each season
+  S.schedCache   = {};    // clear schedule cache for new season
   const { id, league } = S.seasons[idx];
   S.league = league;
 
@@ -453,7 +454,7 @@ document.addEventListener('visibilitychange', () => {
 
 // ─── Week navigation ──────────────────────────────────────────────────────
 function updateWeekDisplay() {
-  const isDH = isCurrentSeason() && !!S.dh[String(S.selectedWeek)];
+  const isDH = isCurrentSeason() && DH_WEEKS.includes(S.selectedWeek);
   const dhDot = isDH ? '<span class="dh-dot" title="Double Header week"></span>' : '';
   document.getElementById('weekLabel').innerHTML = `Week ${S.selectedWeek}${dhDot}`;
   document.getElementById('btnPrev').disabled = S.selectedWeek <= 1;
@@ -509,8 +510,9 @@ async function loadWeek(week) {
 
 async function loadAllWeeks(onProgress) {
   if (S.allLoadedFor === lid()) return;
-  const weeks = [];
-  for (let w = 1; w <= S.currentWeek; w++) weeks.push(w);
+  // Only load the 14 regular-season weeks — playoff weeks are not counted in standings/leaders
+  const maxWeek = Math.min(S.currentWeek, REGULAR_SEASON_WEEKS);
+  const weeks = Array.from({length: maxWeek}, (_, i) => i + 1);
   const BATCH = 4;
   for (let i = 0; i < weeks.length; i += BATCH) {
     const chunk = weeks.slice(i, i + BATCH);
@@ -518,6 +520,65 @@ async function loadAllWeeks(onProgress) {
     if (onProgress) onProgress(Math.min(i + BATCH, weeks.length), weeks.length);
   }
   S.allLoadedFor = lid();
+}
+
+// Load matchup structure only (no stats) — used for DH computation
+async function loadSchedule(week) {
+  const fullKey = `${lid()}:${week}`;
+  if (S.weekCache[fullKey]) return S.weekCache[fullKey].matchups;
+  const sKey = `${lid()}:sched:${week}`;
+  if (S.schedCache[sKey]) return S.schedCache[sKey];
+  const m = await fetchJ(`${API}/league/${lid()}/matchups/${week}`).catch(() => []);
+  S.schedCache[sKey] = m || [];
+  return S.schedCache[sKey];
+}
+
+// Deterministically compute which teams need a double header each DH week.
+// Algorithm:
+//   1. Fetch the full 14-week schedule to count how often each pair plays.
+//   2. Pairs that play only once are the "missing" matchups.
+//   3. Sort missing pairs by (lower_rid ASC, higher_rid ASC) for stability.
+//   4. Chunk evenly into DH_WEEKS in order.
+// Result is always identical for a given season’s schedule.
+async function getDHMatchups() {
+  if (S.dhMatchups !== null) return S.dhMatchups;
+
+  // Fetch all 14 week schedules in parallel
+  const allMatchups = await Promise.all(
+    Array.from({length: REGULAR_SEASON_WEEKS}, (_, i) => loadSchedule(i + 1))
+  );
+
+  // Count how many times each pair plays
+  const pairCount = {};
+  for (const matchups of allMatchups) {
+    const groups = {};
+    for (const m of matchups) {
+      if (!groups[m.matchup_id]) groups[m.matchup_id] = [];
+      groups[m.matchup_id].push(m.roster_id);
+    }
+    for (const rids of Object.values(groups)) {
+      if (rids.length < 2) continue;
+      const lo = Math.min(...rids), hi = Math.max(...rids);
+      const k = `${lo}:${hi}`;
+      pairCount[k] = (pairCount[k] || 0) + 1;
+    }
+  }
+
+  // Pairs played only once need a DH — sorted for determinism
+  const missing = Object.entries(pairCount)
+    .filter(([, c]) => c === 1)
+    .map(([k]) => k.split(':').map(Number))
+    .sort((a, b) => a[0] !== b[0] ? a[0] - b[0] : a[1] - b[1]);
+
+  // Distribute evenly across the 4 DH weeks
+  const perWeek = Math.ceil(missing.length / DH_WEEKS.length);
+  const dh = {};
+  DH_WEEKS.forEach((wk, i) => {
+    dh[wk] = missing.slice(i * perWeek, (i + 1) * perWeek).map(([r1, r2]) => ({r1, r2}));
+  });
+
+  S.dhMatchups = dh;
+  return dh;
 }
 
 // ─── Roster modal ─────────────────────────────────────────────────────────────
@@ -749,19 +810,17 @@ async function renderMatchups() {
     }
     html += '</div>';
 
-    // Double header matchups — only available for the current season
-    const dhKey = String(S.selectedWeek);
-    if (isCurrentSeason() && S.dh[dhKey]) {
-      const { matchups: dhMatchups, comment } = S.dh[dhKey];
-      const commentText = comment ? `<span style="font-size:10px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;margin-left:4px">(${esc(comment)})</span>` : '';
-      html += `<div class="sec-spacer"></div>
-               <div class="sec-head">Double Headers <span class="dh-badge">DH</span>${commentText}</div>
+    // Double header matchups — computed from the full-season schedule
+    if (isCurrentSeason() && DH_WEEKS.includes(S.selectedWeek)) {
+      const dhData  = await getDHMatchups();
+      const dhPairs = dhData[S.selectedWeek] || [];
+      if (dhPairs.length) {
+        html += `<div class="sec-spacer"></div>
+               <div class="sec-head">Double Headers <span class="dh-badge">DH</span></div>
                <div class="matchups-grid">`;
-      for (const match of dhMatchups) {
-        const rids = Object.keys(match.roster_ids).map(Number);
-        if (rids.length >= 2) html += matchupCard(rids[0], rids[1], cs);
+        for (const {r1, r2} of dhPairs) html += matchupCard(r1, r2, cs);
+        html += '</div>';
       }
-      html += '</div>';
     }
 
     setPage(html);
