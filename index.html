@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BAFL — Bad Ass Football League</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d1117;--surface:#161b22;--surface2:#1c2330;--surface3:#212936;
+  --border:#2d3748;--border2:#374151;
+  --accent:#3d9bff;
+  --text:#e6edf3;--muted:#7d8590;
+  --success:#3fb950;--warn:#d29922;--danger:#f85149;
+  --qb:#ff4d6a;--rb:#00cf9f;--wr:#56a5ff;--te:#ffc94d;--k:#a855f7;
+  --font:'Inter','SF Pro Display',system-ui,sans-serif;
+  --mono:'JetBrains Mono','SF Mono','Fira Code',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{max-width:100%;overflow-x:hidden;}
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;font-size:14px;}
+
+/* ── Header ── */
+.header{background:var(--surface);border-bottom:1px solid var(--border);
+  padding:9px 18px;display:flex;align-items:center;gap:12px;
+  position:sticky;top:0;z-index:200;flex-wrap:wrap;}
+.logo{font-size:17px;font-weight:900;color:var(--accent);letter-spacing:-.5px;
+  display:inline-flex;align-items:center;gap:7px;white-space:nowrap;}
+.logo span{color:var(--text);}
+.season-tag{font-size:11px;font-weight:700;color:var(--muted);
+  background:var(--surface2);border:1px solid var(--border);
+  padding:3px 9px;border-radius:5px;white-space:nowrap;}
+.week-nav{display:flex;align-items:center;gap:6px;margin-left:auto;}
+.week-nav button{background:var(--surface2);border:1px solid var(--border);
+  color:var(--text);border-radius:6px;padding:4px 11px;font-size:13px;
+  font-weight:800;cursor:pointer;transition:all .15s;line-height:1;}
+.week-nav button:hover{border-color:var(--accent);color:var(--accent);}
+.week-nav button:disabled{opacity:.35;cursor:not-allowed;pointer-events:none;}
+.week-label{font-size:13px;font-weight:800;color:var(--text);
+  min-width:90px;text-align:center;white-space:nowrap;}
+.dh-dot{display:inline-block;width:7px;height:7px;border-radius:50%;
+  background:var(--warn);margin-left:5px;vertical-align:middle;
+  box-shadow:0 0 5px var(--warn);title:"Double Header week";}
+.hdr-right{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.btn-refresh{background:var(--accent);border:none;color:#000;
+  border-radius:6px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;transition:all .15s;}
+.btn-refresh:hover{background:#5aadff;}
+.btn-refresh:disabled{opacity:.5;cursor:not-allowed;}
+.updated-tag{font-size:10px;color:var(--muted);white-space:nowrap;}
+
+/* ── Tabs ── */
+.tabs{background:var(--surface);border-bottom:1px solid var(--border);
+  padding:0 18px;display:flex;gap:0;overflow-x:auto;}
+.tab{padding:10px 18px;font-size:12px;font-weight:700;cursor:pointer;border:none;
+  background:none;color:var(--muted);border-bottom:2px solid transparent;
+  transition:all .15s;white-space:nowrap;}
+.tab:hover{color:var(--text);}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+
+/* ── Content ── */
+.page{max-width:1240px;margin:0 auto;padding:22px 18px 60px;}
+
+/* ── Section heading ── */
+.sec-head{font-size:10px;font-weight:800;color:var(--muted);letter-spacing:1.2px;
+  text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:10px;}
+.sec-head::after{content:'';flex:1;height:1px;background:var(--border);}
+.sec-spacer{margin-top:30px;}
+.dh-badge{font-size:9px;font-weight:900;color:var(--warn);
+  background:rgba(210,153,34,.15);border:1px solid rgba(210,153,34,.3);
+  padding:2px 7px;border-radius:4px;letter-spacing:.5px;}
+
+/* ── Matchup grid ── */
+.matchups-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(460px,1fr));gap:14px;}
+
+/* ── Matchup card ── */
+.mc{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;}
+.mc table{width:100%;border-collapse:collapse;}
+.mc-hdr th{padding:11px 13px;background:var(--surface2);font-size:12px;font-weight:800;}
+.mc-score{width:44px;text-align:center;font-family:var(--mono);font-size:20px !important;font-weight:900 !important;}
+.mc-score.win{color:var(--success);}
+.mc-score.loss{color:var(--muted);}
+.mc-score.tie{color:var(--warn);}
+.mc-team{text-align:left;}
+.mc-team-r{text-align:right;}
+.mc-cat-hd{text-align:center;font-size:9.5px;font-weight:800;color:var(--muted);letter-spacing:.8px;text-transform:uppercase;}
+.mc tbody tr{border-top:1px solid var(--border);}
+.mc tbody tr:hover{background:var(--surface2);}
+.mc-chk{width:30px;text-align:center;padding:8px 6px;color:var(--success);font-size:15px;font-weight:900;}
+.mc-chk-r{text-align:center;}
+.mc-val{text-align:left;font-family:var(--mono);font-size:13px;font-weight:700;padding:8px 13px;min-width:62px;}
+.mc-val-r{text-align:right;}
+.mc-cat{text-align:center;font-size:11.5px;color:var(--muted);font-weight:600;padding:8px 6px;}
+.mc-total{background:rgba(255,255,255,.025);}
+.mc-total td{border-top:2px solid var(--border) !important;}
+.mc-total .mc-cat{color:var(--text);font-weight:800;}
+.mc-total .mc-val{color:var(--text);font-weight:800;}
+
+/* ── Standings ── */
+.standings-wrap{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;}
+.stbl{width:100%;border-collapse:collapse;}
+.stbl th{background:var(--surface2);padding:9px 14px;font-size:9.5px;font-weight:800;
+  color:var(--muted);letter-spacing:.6px;text-transform:uppercase;border-bottom:1px solid var(--border);}
+.stbl td{padding:10px 14px;border-bottom:1px solid var(--border);font-size:13px;}
+.stbl tbody tr:last-child td{border-bottom:none;}
+.stbl tbody tr:hover td{background:var(--surface2);}
+.stbl .s-rank{font-family:var(--mono);font-weight:800;color:var(--muted);width:36px;}
+.stbl .s-team{font-weight:700;}
+.stbl .s-rec{font-family:var(--mono);font-weight:800;width:70px;}
+.stbl .s-num{font-family:var(--mono);font-weight:700;text-align:right;color:var(--muted);}
+.stbl .s-pf{color:var(--text);}
+.stbl th.r{text-align:right;}
+.stbl tr.playoff-divider td{border-top:2px solid var(--accent);}
+.divider-lbl{font-size:9px;font-weight:800;color:var(--accent);letter-spacing:.5px;
+  background:rgba(61,155,255,.12);padding:1px 6px;border-radius:4px;margin-left:6px;}
+.rec-w{color:var(--success);}
+.rec-l{color:var(--muted);}
+
+/* ── Leaders ── */
+.leaders-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px;}
+.lcard{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 15px;}
+.lcard-title{font-size:10px;font-weight:800;color:var(--accent);text-transform:uppercase;
+  letter-spacing:.7px;margin-bottom:11px;}
+.lrow{display:flex;align-items:center;gap:10px;padding:6px 0;
+  border-bottom:1px solid rgba(255,255,255,.04);font-size:12.5px;}
+.lrow:last-child{border-bottom:none;}
+.lrank{font-family:var(--mono);font-size:11px;font-weight:800;color:var(--muted);width:18px;flex:none;}
+.lrank.r1{color:#f4c04a;}
+.lrank.r2{color:#c0c0c0;}
+.lrank.r3{color:#cd7f32;}
+.lname{flex:1;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.lval{font-family:var(--mono);font-weight:800;color:var(--accent);font-size:13px;white-space:nowrap;}
+
+/* ── Loading / Error ── */
+.loading{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:70px 20px;color:var(--muted);gap:14px;}
+.spin{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);
+  border-radius:50%;animation:spin .75s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-label{font-size:13px;color:var(--muted);}
+.loading-sub{font-size:11px;color:var(--muted);opacity:.7;}
+.error-box{padding:30px 20px;text-align:center;color:var(--danger);font-size:13px;}
+.empty-box{padding:50px 20px;text-align:center;color:var(--muted);font-size:13px;}
+
+/* ── Position badges ── */
+.pos-badge{font-size:9px;font-weight:900;padding:2px 6px;border-radius:4px;
+  letter-spacing:.4px;flex:none;white-space:nowrap;}
+.pos-QB{background:rgba(255,77,106,.18);color:var(--qb);}
+.pos-RB{background:rgba(0,207,159,.18);color:var(--rb);}
+.pos-WR{background:rgba(86,165,255,.18);color:var(--wr);}
+.pos-TE{background:rgba(255,201,77,.18);color:var(--te);}
+.pos-K{background:rgba(168,85,247,.18);color:var(--k);}
+.pos-DEF,.pos-DB,.pos-DL,.pos-LB,.pos-OL,.pos-S{background:rgba(185,138,99,.18);color:#b98a63;}
+
+/* ── Team name link ── */
+.team-link{cursor:pointer;border-bottom:1px dotted rgba(255,255,255,.2);transition:color .12s;}
+.team-link:hover{color:var(--accent);border-bottom-color:var(--accent);}
+
+/* ── Roster modal ── */
+.roster-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:500;
+  display:none;align-items:flex-start;justify-content:center;
+  overflow-y:auto;padding:24px 14px;backdrop-filter:blur(3px);}
+.roster-overlay.active{display:flex;}
+.roster-modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  width:min(480px,100%);overflow:hidden;display:flex;flex-direction:column;
+  box-shadow:0 24px 70px rgba(0,0,0,.55);animation:modalIn .18s ease;}
+@keyframes modalIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+.roster-modal-head{padding:14px 16px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:10px;background:var(--surface2);flex:none;}
+.roster-modal-title{font-size:16px;font-weight:900;flex:1;}
+.roster-modal-close{background:var(--surface3);border:1px solid var(--border);
+  color:var(--muted);border-radius:8px;width:30px;height:30px;font-size:15px;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.roster-modal-close:hover{color:var(--text);border-color:var(--accent);}
+.roster-modal-body{overflow-y:auto;padding:8px 12px 16px;max-height:calc(100vh - 160px);}
+.roster-sec-head{font-size:9.5px;font-weight:800;color:var(--muted);
+  letter-spacing:1px;text-transform:uppercase;padding:10px 4px 5px;
+  border-bottom:1px solid var(--border);margin-bottom:4px;}
+.roster-sec-head:first-child{padding-top:4px;}
+.roster-player{display:flex;align-items:center;gap:10px;padding:6px 8px;
+  border-radius:8px;transition:background .1s;}
+.roster-player:hover{background:var(--surface2);}
+.roster-player.starter{background:rgba(61,155,255,.06);}
+.roster-player.starter:hover{background:rgba(61,155,255,.12);}
+.roster-hs{width:36px;height:36px;border-radius:50%;object-fit:cover;object-position:top;
+  background:var(--surface3);border:1px solid var(--border);flex:none;}
+.roster-hs-err{width:36px;height:36px;border-radius:50%;background:var(--surface3);
+  border:1px solid var(--border);display:none;align-items:center;justify-content:center;
+  font-size:11px;font-weight:900;color:var(--muted);flex:none;}
+.roster-player-info{flex:1;min-width:0;}
+.roster-player-name{display:block;font-size:13px;font-weight:700;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.roster-player-team{font-size:10.5px;color:var(--muted);font-weight:600;}
+.roster-starter-tag{font-size:8px;font-weight:800;color:var(--accent);
+  background:rgba(61,155,255,.14);border:1px solid rgba(61,155,255,.3);
+  padding:1px 5px;border-radius:4px;letter-spacing:.3px;flex:none;}
+
+/* ── Season selector ── */.season-sel{background:var(--surface2);border:1px solid var(--border);color:var(--text);
+  border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer;
+  font-family:var(--font);max-width:130px;}
+.season-sel:hover{border-color:var(--accent);}
+.season-sel:disabled{opacity:.4;cursor:not-allowed;}
+.season-sel option{background:var(--surface2);color:var(--text);}
+.past-season-note{font-size:10px;color:var(--warn);background:rgba(210,153,34,.1);
+  border:1px solid rgba(210,153,34,.25);border-radius:6px;padding:6px 11px;
+  margin-bottom:14px;display:flex;align-items:center;gap:6px;}
+
+/* ── Auto-refresh ── */
+.ar-wrap{display:flex;align-items:center;gap:6px;}
+.ar-toggle{background:var(--surface2);border:1px solid var(--border);color:var(--muted);
+  border-radius:6px;padding:4px 9px;font-size:11px;font-weight:700;cursor:pointer;
+  transition:all .15s;white-space:nowrap;}
+.ar-toggle:hover{border-color:var(--accent);color:var(--text);}
+.ar-toggle.ar-on{border-color:var(--success);color:var(--success);background:rgba(63,185,80,.1);}
+.ar-countdown{font-size:10px;color:var(--muted);font-family:var(--mono);white-space:nowrap;
+  min-width:36px;text-align:right;}
+
+/* ── Mobile ── */
+@media(max-width:640px){
+  .matchups-grid{grid-template-columns:1fr;}
+  .leaders-grid{grid-template-columns:1fr 1fr;}
+  .header{padding:8px 12px;gap:8px;}
+  .page{padding:14px 12px 50px;}
+  .week-label{min-width:70px;font-size:12px;}
+  .mc-team{max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .mc-team-r{max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .mc-score{font-size:16px !important;}
+  .mc-val{padding:7px 9px;font-size:12px;}
+}
+@media(max-width:400px){
+  .leaders-grid{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">🏈 <span>BAFL</span></div>
+  <select id="seasonSel" class="season-sel" onchange="switchSeason(this.value)" disabled>
+    <option>Loading…</option>
+  </select>
+  <div class="week-nav">
+    <button id="btnPrev" onclick="changeWeek(-1)" disabled>‹</button>
+    <span class="week-label" id="weekLabel">—</span>
+    <button id="btnNext" onclick="changeWeek(1)" disabled>›</button>
+  </div>
+  <div class="hdr-right">
+    <div class="ar-wrap">
+      <button class="ar-toggle" id="btnAR" onclick="toggleAutoRefresh()" title="Auto-refresh every 5 min">↻ Auto</button>
+      <span class="ar-countdown" id="arCountdown"></span>
+    </div>
+    <button class="btn-refresh" id="btnRefresh" onclick="refresh()" disabled>Refresh</button>
+    <span class="updated-tag" id="updatedTag"></span>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" data-tab="matchups" onclick="setTab(this)">Matchups</button>
+  <button class="tab" data-tab="standings" onclick="setTab(this)">Standings</button>
+  <button class="tab" data-tab="leaders" onclick="setTab(this)">Leaders</button>
+</div>
+
+<div class="page" id="page">
+  <div class="loading"><div class="spin"></div><div class="loading-label">Loading league data…</div></div>
+</div>
+
+<!-- Roster popup modal -->
+<div class="roster-overlay" id="rosterOverlay" onclick="closeRosterModal()">
+  <div class="roster-modal" onclick="event.stopPropagation()">
+    <div class="roster-modal-head">
+      <span class="roster-modal-title" id="rosterModalTitle"></span>
+      <button class="roster-modal-close" onclick="closeRosterModal()">✕</button>
+    </div>
+    <div class="roster-modal-body" id="rosterModalBody"></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+// ─── Config ───────────────────────────────────────────────────────────────
+const ROOT_LEAGUE_ID = '1389348066355609601'; // current / most-recent season
+const API            = 'https://api.sleeper.app/v1';
+const AR_INTERVAL_MS = 5 * 60 * 1000;         // auto-refresh every 5 min
+
+// ─── State ────────────────────────────────────────────────────────────────
+const S = {
+  seasons: [],       // [{id, season, name, league}] newest-first
+  seasonIdx: 0,      // index into S.seasons for currently-displayed season
+  league: null,
+  users: [],
+  rosters: [],
+  userMap:   {},     // user_id   → display_name
+  rosterMap: {},     // roster_id → display_name
+  dh: {},            // double_headers.json (current season only)
+  currentWeek: 1,
+  selectedWeek: 1,
+  activeTab: 'matchups',
+  weekCache: {},     // `${leagueId}:${week}` → {matchups, stats}
+  allLoadedFor: '',  // leagueId whose all-weeks are fully cached
+  playersCache: null,// cached GET /players/nfl response
+  // Auto-refresh
+  arEnabled: true,
+  arTimer: null,
+  arCountTimer: null,
+  arNextAt: null,
+};
+
+// Convenience: ID of the league currently in view
+function lid() { return S.seasons[S.seasonIdx]?.id || ROOT_LEAGUE_ID; }
+function isCurrentSeason() { return S.seasonIdx === 0; }
+
+// ─── Helpers ──────────────────────────────────────────────────────────────
+async function fetchJ(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status}: ${url}`);
+  return r.json();
+}
+
+// ─── Season chain ────────────────────────────────────────────────────────
+// Walk previous_league_id to discover all past BAFL seasons.
+async function walkSeasonChain() {
+  const chain = [];
+  let id = ROOT_LEAGUE_ID;
+  while (id) {
+    try {
+      const lg = await fetchJ(`${API}/league/${id}`);
+      chain.push({ id, season: lg.season, name: lg.name, league: lg });
+      id = lg.previous_league_id || null;
+    } catch { break; }
+  }
+  return chain; // newest first
+}
+
+function buildSeasonPicker(seasons) {
+  const sel = document.getElementById('seasonSel');
+  sel.innerHTML = seasons.map((s, i) =>
+    `<option value="${i}">${s.season} Season${i === 0 ? ' ★' : ''}</option>`
+  ).join('');
+  sel.disabled = seasons.length <= 1;
+}
+
+// ─── Bootstrap ────────────────────────────────────────────────────────────
+async function init() {
+  try {
+    setLoading('Loading league data…');
+    const [seasons, dh] = await Promise.all([
+      walkSeasonChain(),
+      fetchJ('./double_headers.json').catch(() => ({})),
+    ]);
+    S.seasons = seasons;
+    S.dh = dh || {};
+    buildSeasonPicker(seasons);
+    await loadSeason(0);
+  } catch(e) {
+    setError('Failed to load league: ' + e.message);
+  }
+}
+
+// Load a season by index, wiring up all state
+async function loadSeason(idx) {
+  S.seasonIdx    = idx;
+  S.allLoadedFor = '';
+  const { id, league } = S.seasons[idx];
+  S.league = league;
+
+  const [users, rosters] = await Promise.all([
+    fetchJ(`${API}/league/${id}/users`),
+    fetchJ(`${API}/league/${id}/rosters`),
+  ]);
+  S.users = users;  S.rosters = rosters;
+  S.userMap = {};   S.rosterMap = {};
+  for (const u of users)   S.userMap[u.user_id]     = u.display_name;
+  for (const r of rosters) S.rosterMap[r.roster_id] = S.userMap[r.owner_id] || `Team ${r.roster_id}`;
+
+  const leg = parseInt(league.settings?.leg || 1);
+  S.currentWeek  = Math.max(1, leg);
+  S.selectedWeek = S.currentWeek;
+
+  document.getElementById('seasonSel').value    = String(idx);
+  document.getElementById('seasonSel').disabled = false;
+  document.getElementById('btnRefresh').disabled = false;
+  updateWeekDisplay();
+  stopAutoRefresh();
+  await renderTab();
+  scheduleAutoRefresh();
+}
+
+// ─── Season switching ─────────────────────────────────────────────────────
+async function switchSeason(idxStr) {
+  const idx = parseInt(idxStr);
+  if (idx === S.seasonIdx) return;
+  stopAutoRefresh();
+  setLoading(`Loading ${S.seasons[idx].season} season…`);
+  await loadSeason(idx);
+}
+
+// ─── Auto-refresh ─────────────────────────────────────────────────────────
+// Active only when: current season, current week, matchups tab, page visible.
+function shouldAutoRefresh() {
+  return S.arEnabled
+      && isCurrentSeason()
+      && S.selectedWeek === S.currentWeek
+      && S.activeTab === 'matchups'
+      && !document.hidden;
+}
+
+function scheduleAutoRefresh() {
+  stopAutoRefresh();
+  if (!shouldAutoRefresh()) { updateARUI(); return; }
+  S.arNextAt     = Date.now() + AR_INTERVAL_MS;
+  S.arTimer      = setTimeout(async () => {
+    if (!shouldAutoRefresh()) { scheduleAutoRefresh(); return; }
+    delete S.weekCache[`${lid()}:${S.selectedWeek}`];
+    await renderMatchups();
+    document.getElementById('updatedTag').textContent = `Updated ${new Date().toLocaleTimeString()}`;
+    scheduleAutoRefresh();
+  }, AR_INTERVAL_MS);
+  S.arCountTimer = setInterval(updateARCountdown, 1000);
+  updateARUI();
+}
+
+function stopAutoRefresh() {
+  if (S.arTimer)      { clearTimeout(S.arTimer);      S.arTimer      = null; }
+  if (S.arCountTimer) { clearInterval(S.arCountTimer); S.arCountTimer = null; }
+  S.arNextAt = null;
+  updateARUI();
+}
+
+function toggleAutoRefresh() {
+  S.arEnabled = !S.arEnabled;
+  S.arEnabled ? scheduleAutoRefresh() : stopAutoRefresh();
+}
+
+function updateARCountdown() {
+  if (!S.arNextAt) return;
+  const rem = Math.max(0, Math.round((S.arNextAt - Date.now()) / 1000));
+  const m = Math.floor(rem / 60), s = rem % 60;
+  document.getElementById('arCountdown').textContent = `${m}:${String(s).padStart(2,'0')}`;
+}
+
+function updateARUI() {
+  const btn   = document.getElementById('btnAR');
+  const cntEl = document.getElementById('arCountdown');
+  const active = S.arEnabled && !!S.arTimer;
+  if (btn) btn.classList.toggle('ar-on', active);
+  if (!active && cntEl) cntEl.textContent = '';
+}
+
+// Pause auto-refresh when tab is hidden, resume when visible
+document.addEventListener('visibilitychange', () => {
+  document.hidden ? stopAutoRefresh() : scheduleAutoRefresh();
+});
+
+// ─── Week navigation ──────────────────────────────────────────────────────
+function updateWeekDisplay() {
+  const isDH = isCurrentSeason() && !!S.dh[String(S.selectedWeek)];
+  const dhDot = isDH ? '<span class="dh-dot" title="Double Header week"></span>' : '';
+  document.getElementById('weekLabel').innerHTML = `Week ${S.selectedWeek}${dhDot}`;
+  document.getElementById('btnPrev').disabled = S.selectedWeek <= 1;
+  document.getElementById('btnNext').disabled = S.selectedWeek >= S.currentWeek;
+  document.getElementById('updatedTag').textContent = `Updated ${new Date().toLocaleTimeString()}`;
+}
+
+async function changeWeek(d) {
+  const nw = S.selectedWeek + d;
+  if (nw < 1 || nw > S.currentWeek) return;
+  S.selectedWeek = nw;
+  updateWeekDisplay();
+  stopAutoRefresh();
+  if (S.activeTab === 'matchups') await renderMatchups();
+  scheduleAutoRefresh();
+}
+
+async function refresh() {
+  stopAutoRefresh();
+  delete S.weekCache[`${lid()}:${S.selectedWeek}`];
+  if (S.allLoadedFor === lid()) S.allLoadedFor = '';
+  await renderTab();
+  scheduleAutoRefresh();
+}
+
+// ─── Tab switching ────────────────────────────────────────────────────────
+function setTab(btn) {
+  S.activeTab = btn.dataset.tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t === btn));
+  stopAutoRefresh();
+  renderTab();
+  scheduleAutoRefresh();
+}
+
+async function renderTab() {
+  if (S.activeTab === 'matchups') await renderMatchups();
+  else if (S.activeTab === 'standings') await renderStandings();
+  else if (S.activeTab === 'leaders') await renderLeaders();
+}
+
+// ─── Data loading ─────────────────────────────────────────────────────────
+async function loadWeek(week) {
+  const key = `${lid()}:${week}`;
+  if (S.weekCache[key]) return S.weekCache[key];
+  const season = S.league.season;
+  const [matchups, stats] = await Promise.all([
+    fetchJ(`${API}/league/${lid()}/matchups/${week}`),
+    fetchJ(`${API}/stats/nfl/regular/${season}/${week}`),
+  ]);
+  S.weekCache[key] = { matchups: matchups || [], stats: stats || {} };
+  return S.weekCache[key];
+}
+
+async function loadAllWeeks(onProgress) {
+  if (S.allLoadedFor === lid()) return;
+  const weeks = [];
+  for (let w = 1; w <= S.currentWeek; w++) weeks.push(w);
+  const BATCH = 4;
+  for (let i = 0; i < weeks.length; i += BATCH) {
+    const chunk = weeks.slice(i, i + BATCH);
+    await Promise.all(chunk.map(w => loadWeek(w).catch(() => null)));
+    if (onProgress) onProgress(Math.min(i + BATCH, weeks.length), weeks.length);
+  }
+  S.allLoadedFor = lid();
+}
+
+// ─── Roster modal ─────────────────────────────────────────────────────────────
+const POS_ORDER = { QB:0, RB:1, WR:2, TE:3, K:4 };
+
+async function loadPlayers() {
+  if (S.playersCache) return S.playersCache;
+  // Full NFL player dict — fetched once per session (~5MB, browser-cached daily)
+  S.playersCache = await fetchJ(`${API}/players/nfl`);
+  return S.playersCache;
+}
+
+async function openRosterModal(rid) {
+  const overlay = document.getElementById('rosterOverlay');
+  const titleEl = document.getElementById('rosterModalTitle');
+  const body    = document.getElementById('rosterModalBody');
+
+  titleEl.textContent = S.rosterMap[rid] || `Team ${rid}`;
+  body.innerHTML = '<div class="loading"><div class="spin"></div><div>Loading roster…</div></div>';
+  overlay.classList.add('active');
+  document.body.style.overflow = 'hidden';
+
+  try {
+    const roster = S.rosters.find(r => r.roster_id === rid);
+    if (!roster) { body.innerHTML = '<div class="empty-box">Roster not found.</div>'; return; }
+
+    // Starters from the currently-selected week (if available)
+    const weekData  = S.weekCache[`${lid()}:${S.selectedWeek}`];
+    const weekEntry = weekData?.matchups?.find(m => m.roster_id === rid);
+    const starters  = new Set(weekEntry?.starters || []);
+
+    const players   = await loadPlayers();
+    const playerIds = roster.players || [];
+
+    const sorted = playerIds
+      .map(pid => ({ pid, p: players[pid] || {} }))
+      .filter(({ p }) => p.last_name || p.full_name)
+      .sort((a, b) => {
+        const aS = starters.has(a.pid) ? 0 : 1;
+        const bS = starters.has(b.pid) ? 0 : 1;
+        if (aS !== bS) return aS - bS;
+        const aO = POS_ORDER[a.p.position] ?? 9;
+        const bO = POS_ORDER[b.p.position] ?? 9;
+        if (aO !== bO) return aO - bO;
+        return (a.p.full_name || '').localeCompare(b.p.full_name || '');
+      });
+
+    const starterList = sorted.filter(({ pid }) => starters.has(pid));
+    const benchList   = sorted.filter(({ pid }) => !starters.has(pid));
+
+    let html = '';
+    if (starterList.length) {
+      html += `<div class="roster-sec-head">Starting Lineup — Week ${S.selectedWeek}</div>`;
+      html += starterList.map(({ pid, p }) => playerRowHTML(pid, p, true)).join('');
+    }
+    if (benchList.length) {
+      html += `<div class="roster-sec-head">Bench</div>`;
+      html += benchList.map(({ pid, p }) => playerRowHTML(pid, p, false)).join('');
+    }
+    if (!html) html = '<div class="empty-box">No players found.</div>';
+    body.innerHTML = html;
+  } catch(e) {
+    body.innerHTML = `<div class="error-box">⚠ ${esc(e.message)}</div>`;
+  }
+}
+
+function playerRowHTML(pid, p, isStarter) {
+  const name = p.full_name || `${p.first_name||''} ${p.last_name||''}`.trim() || pid;
+  const pos  = (p.position || '?').toUpperCase();
+  const team = p.team || '';
+  const hs   = `https://sleepercdn.com/content/nfl/players/thumb/${pid}.jpg`;
+  const starterTag = isStarter ? '<span class="roster-starter-tag">STARTER</span>' : '';
+  return `<div class="roster-player${isStarter ? ' starter' : ''}">
+    <img class="roster-hs" src="${hs}" alt="" loading="lazy"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+    <div class="roster-hs-err">${esc(pos[0]||'?')}</div>
+    <span class="pos-badge pos-${esc(pos)}">${esc(pos)}</span>
+    <div class="roster-player-info">
+      <span class="roster-player-name">${esc(name)}</span>
+      <span class="roster-player-team">${esc(team)}</span>
+    </div>
+    ${starterTag}
+  </div>`;
+}
+
+function closeRosterModal() {
+  document.getElementById('rosterOverlay').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+// Close on Escape key
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeRosterModal(); });
+
+// ─── Core BAFL stat calculation ───────────────────────────────────────────
+// Accumulates per-roster category totals from a week's matchups + stats dict.
+// Passing: raw pass yards minus 20 per interception
+// Kicking: XPM + 3×FGM + 2×(2PT conversions)
+function calcCatStats(matchups, statsDict) {
+  const passing = {}, rushing = {}, receiving = {}, tds = {}, kicking = {};
+  for (const m of matchups) {
+    const rid = m.roster_id;
+    passing[rid] = rushing[rid] = receiving[rid] = tds[rid] = kicking[rid] = 0;
+  }
+  for (const m of matchups) {
+    const rid = m.roster_id;
+    const starters = m.starters || [];
+    const pp = m.players_points || {};
+    for (const pid of starters) {
+      if (!(pid in pp)) continue;   // player did not participate (same check as Python)
+      const ps = statsDict[pid] || {};
+      passing[rid]  += (ps.pass_yd  || 0) - (ps.pass_int || 0) * 20;
+      rushing[rid]  += (ps.rush_yd  || 0);
+      receiving[rid]+= (ps.rec_yd   || 0);
+      tds[rid]      += (ps.pass_td  || 0) + (ps.rec_td || 0) + (ps.rush_td || 0);
+      kicking[rid]  += (ps.xpm      || 0)
+                    +  (ps.fgm      || 0) * 3
+                    + ((ps.pass_2pt || 0) + (ps.rec_2pt || 0) + (ps.rush_2pt || 0)) * 2;
+    }
+  }
+  return { passing, rushing, receiving, tds, kicking };
+}
+
+// Category comparison: 0 = rid1 wins, 1 = rid2 wins, 2 = tie  (same logic as Python)
+function cmp(a, b) { return a > b ? 0 : b > a ? 1 : 2; }
+
+// Full matchup result between two roster IDs using pre-computed cat stats
+function calcResult(cs, rid1, rid2) {
+  const cats = {
+    Passing:    cmp(cs.passing[rid1]  || 0, cs.passing[rid2]  || 0),
+    Receiving:  cmp(cs.receiving[rid1]|| 0, cs.receiving[rid2]|| 0),
+    Rushing:    cmp(cs.rushing[rid1]  || 0, cs.rushing[rid2]  || 0),
+    Touchdowns: cmp(cs.tds[rid1]      || 0, cs.tds[rid2]      || 0),
+    Kicking:    cmp(cs.kicking[rid1]  || 0, cs.kicking[rid2]  || 0),
+  };
+  let s1 = 0, s2 = 0;
+  for (const v of Object.values(cats)) { if (v===0) s1++; else if (v===1) s2++; }
+  const ty1 = (cs.passing[rid1]||0) + (cs.rushing[rid1]||0) + (cs.receiving[rid1]||0);
+  const ty2 = (cs.passing[rid2]||0) + (cs.rushing[rid2]||0) + (cs.receiving[rid2]||0);
+  const tie = s1 === s2;
+  const tb1 = tie && ty1 > ty2;   // team1 wins tiebreaker (shown as *)
+  const tb2 = tie && ty2 > ty1;
+  return {
+    cats, s1, s2,
+    s1dec: s1 + (tb1 ? .5 : 0),
+    s2dec: s2 + (tb2 ? .5 : 0),
+    ty1, ty2, tb1, tb2,
+  };
+}
+
+// ─── Matchup card HTML ────────────────────────────────────────────────────
+function matchupCard(rid1, rid2, cs) {
+  const r = calcResult(cs, rid1, rid2);
+  const n1 = `<span class="team-link" onclick="openRosterModal(${rid1})">${esc(S.rosterMap[rid1] || `Team ${rid1}`)}</span>`;
+  const n2 = `<span class="team-link" onclick="openRosterModal(${rid2})">${esc(S.rosterMap[rid2] || `Team ${rid2}`)}</span>`;
+  const s1s = r.tb1 ? `${r.s1}*` : String(r.s1);
+  const s2s = r.tb2 ? `${r.s2}*` : String(r.s2);
+  const cls1 = r.s1dec > r.s2dec ? 'win' : r.s1dec < r.s2dec ? 'loss' : 'tie';
+  const cls2 = r.s2dec > r.s1dec ? 'win' : r.s2dec < r.s1dec ? 'loss' : 'tie';
+
+  const CAT_KEYS = ['Passing','Receiving','Rushing','Touchdowns','Kicking'];
+  const CAT_MAP  = { Passing:'passing', Receiving:'receiving', Rushing:'rushing', Touchdowns:'tds', Kicking:'kicking' };
+
+  const rows = CAT_KEYS.map(label => {
+    const key = CAT_MAP[label];
+    const cr  = r.cats[label];
+    const v1  = cs[key][rid1] || 0;
+    const v2  = cs[key][rid2] || 0;
+    const fmt = key === 'tds' ? v => Math.round(v) : v => Math.round(v);
+    const chk = '<span style="color:var(--success);font-size:16px">✔</span>';
+    return `<tr>
+      <td class="mc-chk">${cr===0 ? chk : ''}</td>
+      <td class="mc-val">${fmt(v1)}</td>
+      <td class="mc-cat">${label}</td>
+      <td class="mc-val mc-val-r">${fmt(v2)}</td>
+      <td class="mc-chk mc-chk-r">${cr===1 ? chk : ''}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+  <div class="mc">
+    <table>
+      <thead>
+        <tr class="mc-hdr">
+          <th class="mc-score ${cls1}">${s1s}</th>
+          <th class="mc-team">${n1}</th>
+          <th class="mc-cat-hd">Categories</th>
+          <th class="mc-team mc-team-r">${n2}</th>
+          <th class="mc-score ${cls2}" style="text-align:center">${s2s}</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+        <tr class="mc-total">
+          <td></td>
+          <td class="mc-val">${Math.round(r.ty1)}</td>
+          <td class="mc-cat" style="color:var(--text);font-weight:800">Total Yards</td>
+          <td class="mc-val mc-val-r">${Math.round(r.ty2)}</td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>`;
+}
+
+// ─── Render: Matchups tab ─────────────────────────────────────────────────
+async function renderMatchups() {
+  setLoading('Loading week data…');
+  try {
+    const { matchups, stats } = await loadWeek(S.selectedWeek);
+
+    if (!matchups.length) {
+      setPage('<div class="empty-box">No matchup data available for this week.</div>');
+      return;
+    }
+
+    const cs = calcCatStats(matchups, stats);
+
+    // Group Sleeper matchups by matchup_id
+    const groups = {};
+    for (const m of matchups) {
+      if (!groups[m.matchup_id]) groups[m.matchup_id] = [];
+      groups[m.matchup_id].push(m.roster_id);
+    }
+
+    let html = '<div class="sec-head">Regular Matchups</div>';
+    html += '<div class="matchups-grid">';
+    for (const rids of Object.values(groups)) {
+      if (rids.length >= 2) html += matchupCard(rids[0], rids[1], cs);
+    }
+    html += '</div>';
+
+    // Double header matchups — only available for the current season
+    const dhKey = String(S.selectedWeek);
+    if (isCurrentSeason() && S.dh[dhKey]) {
+      const { matchups: dhMatchups, comment } = S.dh[dhKey];
+      const commentText = comment ? `<span style="font-size:10px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;margin-left:4px">(${esc(comment)})</span>` : '';
+      html += `<div class="sec-spacer"></div>
+               <div class="sec-head">Double Headers <span class="dh-badge">DH</span>${commentText}</div>
+               <div class="matchups-grid">`;
+      for (const match of dhMatchups) {
+        const rids = Object.keys(match.roster_ids).map(Number);
+        if (rids.length >= 2) html += matchupCard(rids[0], rids[1], cs);
+      }
+      html += '</div>';
+    }
+
+    setPage(html);
+  } catch(e) {
+    setError('Failed to load week: ' + e.message);
+  }
+}
+
+// ─── Render: Standings tab ────────────────────────────────────────────────
+async function renderStandings() {
+  setLoading('Calculating standings…', `Loading all ${S.currentWeek} weeks…`);
+  try {
+    let progressEl = null;
+    await loadAllWeeks((done, total) => {
+      progressEl = document.querySelector('.loading-sub');
+      if (progressEl) progressEl.textContent = `Loaded ${done} / ${total} weeks…`;
+    });
+
+    // Build standings from scratch (all regular + DH matchups)
+    const st = {};
+    for (const r of S.rosters) {
+      st[r.roster_id] = { rid: r.roster_id, name: S.rosterMap[r.roster_id], wins:0, losses:0, ties:0, pf:0, pa:0 };
+    }
+
+    for (let w = 1; w <= S.currentWeek; w++) {
+      const wd = S.weekCache[`${lid()}:${w}`];
+      if (!wd || !wd.matchups.length) continue;
+      const cs = calcCatStats(wd.matchups, wd.stats);
+
+      // Regular matchups
+      const groups = {};
+      for (const m of wd.matchups) {
+        if (!groups[m.matchup_id]) groups[m.matchup_id] = [];
+        groups[m.matchup_id].push(m.roster_id);
+      }
+      for (const rids of Object.values(groups)) {
+        if (rids.length < 2) continue;
+        applyResult(st, cs, rids[0], rids[1]);
+      }
+
+      // Double header matchups for this week (current season only)
+      const dhKey = String(w);
+      if (isCurrentSeason() && S.dh[dhKey]) {
+        for (const match of S.dh[dhKey].matchups) {
+          const rids = Object.keys(match.roster_ids).map(Number);
+          if (rids.length < 2) continue;
+          applyResult(st, cs, rids[0], rids[1]);
+        }
+      }
+    }
+
+    const sorted = Object.values(st).sort((a,b) => b.wins !== a.wins ? b.wins - a.wins : b.pf - a.pf);
+    const playoffCount = Math.floor(sorted.length / 2); // top half make playoffs
+
+    let rows = '';
+    sorted.forEach((s, i) => {
+      const rec = s.ties > 0 ? `${s.wins}-${s.losses}-${s.ties}` : `${s.wins}-${s.losses}`;
+      const cutoff = i === playoffCount ? ' class="playoff-divider"' : '';
+      const lbl = i === playoffCount ? `<span class="divider-lbl">Bubble</span>` : '';
+      rows += `<tr${cutoff}>
+        <td class="s-rank">${i+1}</td>
+        <td class="s-team"><span class="team-link" onclick="openRosterModal(${s.rid})">${esc(s.name)}</span>${lbl}</td>
+        <td class="s-rec"><span class="rec-w">${s.wins}</span>-<span class="rec-l">${s.losses}</span>${s.ties ? `-${s.ties}` : ''}</td>
+        <td class="s-num s-pf">${fmtPts(s.pf)}</td>
+        <td class="s-num">${fmtPts(s.pa)}</td>
+      </tr>`;
+    });
+
+    const html = `
+      <div class="sec-head">Standings — Through Week ${S.currentWeek}
+        <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;color:var(--muted)">
+          ${isCurrentSeason() ? 'includes double headers' : 'regular matchups only — DH data not available for past seasons'}
+        </span>
+      </div>
+      <div class="standings-wrap">
+        <table class="stbl">
+          <thead>
+            <tr>
+              <th>Rank</th><th>Team</th><th>Record</th>
+              <th class="r">PF</th><th class="r">PA</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+    setPage(html);
+  } catch(e) {
+    setError('Failed to calculate standings: ' + e.message);
+  }
+}
+
+// Apply a single matchup result to the standings object
+function applyResult(st, cs, rid1, rid2) {
+  if (!st[rid1] || !st[rid2]) return;
+  const r = calcResult(cs, rid1, rid2);
+  st[rid1].pf += r.s1dec; st[rid1].pa += r.s2dec;
+  st[rid2].pf += r.s2dec; st[rid2].pa += r.s1dec;
+  if (r.s1dec > r.s2dec)      { st[rid1].wins++;  st[rid2].losses++; }
+  else if (r.s2dec > r.s1dec) { st[rid2].wins++;  st[rid1].losses++; }
+  else                         { st[rid1].ties++;  st[rid2].ties++;   }
+}
+
+// ─── Render: Leaders tab ──────────────────────────────────────────────────
+async function renderLeaders() {
+  setLoading('Calculating leaders…', `Loading all ${S.currentWeek} weeks…`);
+  try {
+    await loadAllWeeks((done, total) => {
+      const el = document.querySelector('.loading-sub');
+      if (el) el.textContent = `Loaded ${done} / ${total} weeks…`;
+    });
+
+    const cats = ['passing','rushing','receiving','tds','kicking'];
+    const totals = {};
+    for (const r of S.rosters) {
+      totals[r.roster_id] = { passing:0, rushing:0, receiving:0, tds:0, kicking:0, yardage:0 };
+    }
+
+    for (let w = 1; w <= S.currentWeek; w++) {
+      const wd = S.weekCache[`${lid()}:${w}`];
+      if (!wd || !wd.matchups.length) continue;
+      const cs = calcCatStats(wd.matchups, wd.stats);
+      for (const r of S.rosters) {
+        const rid = r.roster_id;
+        const t = totals[rid];
+        t.passing   += cs.passing[rid]   || 0;
+        t.rushing   += cs.rushing[rid]   || 0;
+        t.receiving += cs.receiving[rid] || 0;
+        t.tds       += cs.tds[rid]       || 0;
+        t.kicking   += cs.kicking[rid]   || 0;
+        t.yardage   += (cs.passing[rid]||0) + (cs.rushing[rid]||0) + (cs.receiving[rid]||0);
+      }
+    }
+
+    const SECTIONS = [
+      { key:'passing',   label:'Passing Leaders',        fmt: v => Math.round(v).toLocaleString() + ' yds' },
+      { key:'receiving', label:'Receiving Leaders',      fmt: v => Math.round(v).toLocaleString() + ' yds' },
+      { key:'rushing',   label:'Rushing Leaders',        fmt: v => Math.round(v).toLocaleString() + ' yds' },
+      { key:'tds',       label:'Touchdown Leaders',      fmt: v => v.toFixed(0) + ' TDs' },
+      { key:'kicking',   label:'Kicking Leaders',        fmt: v => Math.round(v).toLocaleString() + ' pts' },
+      { key:'yardage',   label:'Total Yardage Leaders',  fmt: v => Math.round(v).toLocaleString() + ' yds' },
+    ];
+
+    let html = `<div class="sec-head">League Leaders — Through Week ${S.currentWeek}</div>
+                <div class="leaders-grid">`;
+
+    for (const { key, label, fmt } of SECTIONS) {
+      const sorted = Object.entries(totals)
+        .sort((a,b) => b[1][key] - a[1][key])
+        .slice(0, 5);
+
+      html += `<div class="lcard"><div class="lcard-title">${label}</div>`;
+      sorted.forEach(([rid, vals], i) => {
+        const rnk = i < 3 ? `r${i+1}` : '';
+        html += `<div class="lrow">
+          <span class="lrank ${rnk}">${i+1}</span>
+          <span class="lname">${esc(S.rosterMap[parseInt(rid)] || `Team ${rid}`)}</span>
+          <span class="lval">${fmt(vals[key])}</span>
+        </div>`;
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+    setPage(html);
+  } catch(e) {
+    setError('Failed to calculate leaders: ' + e.message);
+  }
+}
+
+// ─── UI helpers ───────────────────────────────────────────────────────────
+function setPage(html) {
+  document.getElementById('page').innerHTML = html;
+}
+function setLoading(msg, sub) {
+  document.getElementById('page').innerHTML = `
+    <div class="loading">
+      <div class="spin"></div>
+      <div class="loading-label">${esc(msg)}</div>
+      ${sub ? `<div class="loading-sub">${esc(sub)}</div>` : ''}
+    </div>`;
+}
+function setError(msg) {
+  document.getElementById('page').innerHTML = `<div class="error-box">⚠ ${esc(msg)}</div>`;
+}
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function fmtPts(v) {
+  return v % 1 === 0 ? String(v) : v.toFixed(1);
+}
+
+// ─── Start ────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
