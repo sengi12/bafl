@@ -454,7 +454,7 @@ document.addEventListener('visibilitychange', () => {
 
 // ─── Week navigation ──────────────────────────────────────────────────────
 function updateWeekDisplay() {
-  const isDH = isCurrentSeason() && DH_WEEKS.includes(S.selectedWeek);
+  const isDH = DH_WEEKS.includes(S.selectedWeek);
   const dhDot = isDH ? '<span class="dh-dot" title="Double Header week"></span>' : '';
   document.getElementById('weekLabel').innerHTML = `Week ${S.selectedWeek}${dhDot}`;
   document.getElementById('btnPrev').disabled = S.selectedWeek <= 1;
@@ -811,7 +811,7 @@ async function renderMatchups() {
     html += '</div>';
 
     // Double header matchups — computed from the full-season schedule
-    if (isCurrentSeason() && DH_WEEKS.includes(S.selectedWeek)) {
+    if (DH_WEEKS.includes(S.selectedWeek)) {
       const dhData  = await getDHMatchups();
       const dhPairs = dhData[S.selectedWeek] || [];
       if (dhPairs.length) {
@@ -831,21 +831,21 @@ async function renderMatchups() {
 
 // ─── Render: Standings tab ────────────────────────────────────────────────
 async function renderStandings() {
-  setLoading('Calculating standings…', `Loading all ${S.currentWeek} weeks…`);
+  const rsWeek = Math.min(S.currentWeek, REGULAR_SEASON_WEEKS);
+  setLoading('Calculating standings…', `Loading weeks 1–${rsWeek}…`);
   try {
-    let progressEl = null;
     await loadAllWeeks((done, total) => {
-      progressEl = document.querySelector('.loading-sub');
-      if (progressEl) progressEl.textContent = `Loaded ${done} / ${total} weeks…`;
+      const el = document.querySelector('.loading-sub');
+      if (el) el.textContent = `Loaded ${done} / ${total} weeks…`;
     });
+    const dhData = await getDHMatchups();
 
-    // Build standings from scratch (all regular + DH matchups)
     const st = {};
     for (const r of S.rosters) {
       st[r.roster_id] = { rid: r.roster_id, name: S.rosterMap[r.roster_id], wins:0, losses:0, ties:0, pf:0, pa:0 };
     }
 
-    for (let w = 1; w <= S.currentWeek; w++) {
+    for (let w = 1; w <= rsWeek; w++) {
       const wd = S.weekCache[`${lid()}:${w}`];
       if (!wd || !wd.matchups.length) continue;
       const cs = calcCatStats(wd.matchups, wd.stats);
@@ -861,27 +861,18 @@ async function renderStandings() {
         applyResult(st, cs, rids[0], rids[1]);
       }
 
-      // Double header matchups for this week (current season only)
-      const dhKey = String(w);
-      if (isCurrentSeason() && S.dh[dhKey]) {
-        for (const match of S.dh[dhKey].matchups) {
-          const rids = Object.keys(match.roster_ids).map(Number);
-          if (rids.length < 2) continue;
-          applyResult(st, cs, rids[0], rids[1]);
-        }
-      }
+      for (const {r1, r2} of (dhData[w] || [])) applyResult(st, cs, r1, r2);
     }
 
     const sorted = Object.values(st).sort((a,b) => b.wins !== a.wins ? b.wins - a.wins : b.pf - a.pf);
-    const playoffCount = Math.floor(sorted.length / 2); // top half make playoffs
 
     let rows = '';
     sorted.forEach((s, i) => {
-      const rec = s.ties > 0 ? `${s.wins}-${s.losses}-${s.ties}` : `${s.wins}-${s.losses}`;
-      const cutoff = i === playoffCount ? ' class="playoff-divider"' : '';
-      const lbl = i === playoffCount ? `<span class="divider-lbl">Bubble</span>` : '';
+      const rec    = s.ties > 0 ? `${s.wins}-${s.losses}-${s.ties}` : `${s.wins}-${s.losses}`;
+      const cutoff = i === PLAYOFF_CUTOFF ? ' class="playoff-divider"' : '';
+      const lbl    = i === PLAYOFF_CUTOFF ? '<span class="divider-lbl">Out of Playoffs</span>' : '';
       rows += `<tr${cutoff}>
-        <td class="s-rank">${i+1}</td>
+        <td class="s-rank">${i+1}${i < PLAYOFF_CUTOFF ? ' 🏆' : ''}</td>
         <td class="s-team"><span class="team-link" onclick="openRosterModal(${s.rid})">${esc(s.name)}</span>${lbl}</td>
         <td class="s-rec"><span class="rec-w">${s.wins}</span>-<span class="rec-l">${s.losses}</span>${s.ties ? `-${s.ties}` : ''}</td>
         <td class="s-num s-pf">${fmtPts(s.pf)}</td>
@@ -890,11 +881,7 @@ async function renderStandings() {
     });
 
     const html = `
-      <div class="sec-head">Standings — Through Week ${S.currentWeek}
-        <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;color:var(--muted)">
-          ${isCurrentSeason() ? 'includes double headers' : 'regular matchups only — DH data not available for past seasons'}
-        </span>
-      </div>
+      <div class="sec-head">Standings — Through Week ${rsWeek} <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;color:var(--muted)">includes double headers</span></div>
       <div class="standings-wrap">
         <table class="stbl">
           <thead>
@@ -925,20 +912,20 @@ function applyResult(st, cs, rid1, rid2) {
 
 // ─── Render: Leaders tab ──────────────────────────────────────────────────
 async function renderLeaders() {
-  setLoading('Calculating leaders…', `Loading all ${S.currentWeek} weeks…`);
+  const rsWeek = Math.min(S.currentWeek, REGULAR_SEASON_WEEKS);
+  setLoading('Calculating leaders…', `Loading weeks 1–${rsWeek}…`);
   try {
     await loadAllWeeks((done, total) => {
       const el = document.querySelector('.loading-sub');
       if (el) el.textContent = `Loaded ${done} / ${total} weeks…`;
     });
 
-    const cats = ['passing','rushing','receiving','tds','kicking'];
     const totals = {};
     for (const r of S.rosters) {
       totals[r.roster_id] = { passing:0, rushing:0, receiving:0, tds:0, kicking:0, yardage:0 };
     }
 
-    for (let w = 1; w <= S.currentWeek; w++) {
+    for (let w = 1; w <= rsWeek; w++) {
       const wd = S.weekCache[`${lid()}:${w}`];
       if (!wd || !wd.matchups.length) continue;
       const cs = calcCatStats(wd.matchups, wd.stats);
@@ -963,8 +950,7 @@ async function renderLeaders() {
       { key:'yardage',   label:'Total Yardage Leaders',  fmt: v => Math.round(v).toLocaleString() + ' yds' },
     ];
 
-    let html = `<div class="sec-head">League Leaders — Through Week ${S.currentWeek}</div>
-                <div class="leaders-grid">`;
+    let html = `<div class="sec-head">League Leaders — Through Week ${rsWeek}</div><div class="leaders-grid">`;
 
     for (const { key, label, fmt } of SECTIONS) {
       const sorted = Object.entries(totals)
@@ -973,10 +959,11 @@ async function renderLeaders() {
 
       html += `<div class="lcard"><div class="lcard-title">${label}</div>`;
       sorted.forEach(([rid, vals], i) => {
-        const rnk = i < 3 ? `r${i+1}` : '';
+        const rnk  = i < 3 ? `r${i+1}` : '';
+        const name = S.rosterMap[parseInt(rid)] || `Team ${rid}`;
         html += `<div class="lrow">
           <span class="lrank ${rnk}">${i+1}</span>
-          <span class="lname">${esc(S.rosterMap[parseInt(rid)] || `Team ${rid}`)}</span>
+          <span class="lname"><span class="team-link" onclick="openRosterModal(${parseInt(rid)})">${esc(name)}</span></span>
           <span class="lval">${fmt(vals[key])}</span>
         </div>`;
       });
