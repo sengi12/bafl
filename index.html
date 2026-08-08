@@ -608,18 +608,27 @@ async function loadSchedule(week) {
 //   2. Pairs that play only once are the "missing" matchups.
 //   3. Sort missing pairs by (lower_rid ASC, higher_rid ASC) for stability.
 //   4. Chunk evenly into DH_WEEKS in order.
-// Result is always identical for a given season’s schedule.
+// Compute DH matchups by finding "source weeks" - regular-season weeks
+// whose matchups are all once-only pairs - then assigning them to DH weeks.
+// Pattern verified against 2025 double_headers.json:
+//   source weeks [6,7,8,9], DH weeks [2,3,13,14]
+//   lower half source -> upper DH:  6->13, 7->14
+//   upper half source -> lower DH:  8->2,  9->3
 async function getDHMatchups() {
   if (S.dhMatchups !== null) return S.dhMatchups;
-  // Short-circuit for unstarted seasons — no schedule data to analyze
   if (!S.seasonStarted) { S.dhMatchups = {}; return S.dhMatchups; }
 
   const allMatchups = await Promise.all(
     Array.from({length: REGULAR_SEASON_WEEKS}, (_, i) => loadSchedule(i + 1))
   );
 
+  // Count how many times each pair plays and record pairs per week
   const pairCount = {};
-  for (const matchups of allMatchups) {
+  const weekPairs = [];
+
+  for (let wi = 0; wi < REGULAR_SEASON_WEEKS; wi++) {
+    const matchups = allMatchups[wi];
+    const pairs = [];
     const groups = {};
     for (const m of matchups) {
       if (!groups[m.matchup_id]) groups[m.matchup_id] = [];
@@ -628,32 +637,55 @@ async function getDHMatchups() {
     for (const rids of Object.values(groups)) {
       if (rids.length < 2) continue;
       const lo = Math.min(...rids), hi = Math.max(...rids);
-      pairCount[`${lo}:${hi}`] = (pairCount[`${lo}:${hi}`] || 0) + 1;
+      const key = `${lo}:${hi}`;
+      pairCount[key] = (pairCount[key] || 0) + 1;
+      pairs.push({ lo, hi, key });
     }
+    weekPairs.push(pairs);
   }
 
-  // Once-only pairs sorted deterministically
-  let remaining = Object.entries(pairCount)
-    .filter(([, c]) => c === 1)
-    .map(([k]) => k.split(':').map(Number))
-    .sort((a, b) => a[0] !== b[0] ? a[0] - b[0] : a[1] - b[1]);
+  // Once-only pairs: teams that play each other only once in the regular season
+  const oncePairs = new Set(
+    Object.entries(pairCount).filter(([, c]) => c === 1).map(([k]) => k)
+  );
 
-  // Partition into 4 valid perfect matchings (each team once per DH week)
-  const dh = {};
+  // Source weeks: regular-season weeks where every matchup is a once-only pair.
+  // These are used as the DH opponent templates.
+  const sourceWeeks = weekPairs
+    .map((pairs, wi) => ({ week: wi + 1, pairs }))
+    .filter(({ pairs }) => pairs.length === 5 && pairs.every(p => oncePairs.has(p.key)))
+    .sort((a, b) => a.week - b.week);
+
   const sortedDHWeeks = [...DH_WEEKS].sort((a, b) => a - b);
-  for (const wk of sortedDHWeeks) {
-    const matching = findPerfectMatching(remaining);
-    const usedSet  = new Set(matching.map(([a,b]) => `${a}:${b}`));
-    dh[wk]    = matching.sort((a,b) => a[0]-b[0]||a[1]-b[1]).map(([r1,r2]) => ({r1,r2}));
-    remaining = remaining.filter(([a,b]) => !usedSet.has(`${a}:${b}`));
+  const dh = {};
+
+  if (sourceWeeks.length === DH_WEEKS.length) {
+    // Interleave: lower source weeks -> upper DH weeks; upper source -> lower DH weeks
+    const n = sourceWeeks.length;
+    const half = Math.floor(n / 2);
+    for (let i = 0; i < n; i++) {
+      const dhIdx = i < half ? i + half : i - half;
+      const dhWk  = sortedDHWeeks[dhIdx];
+      dh[dhWk] = sourceWeeks[i].pairs
+        .sort((a, b) => a.lo - b.lo || a.hi - b.hi)
+        .map(({ lo, hi }) => ({ r1: lo, r2: hi }));
+    }
+  } else {
+    // Fallback: backtracking perfect matching
+    let remaining = [...oncePairs]
+      .map(k => k.split(':').map(Number))
+      .sort((a, b) => a[0] !== b[0] ? a[0] - b[0] : a[1] - b[1]);
+    for (const wk of sortedDHWeeks) {
+      const matching = findPerfectMatching(remaining);
+      const usedSet  = new Set(matching.map(([a,b]) => `${a}:${b}`));
+      dh[wk]    = matching.sort((a,b) => a[0]-b[0]||a[1]-b[1]).map(([r1,r2]) => ({r1,r2}));
+      remaining = remaining.filter(([a,b]) => !usedSet.has(`${a}:${b}`));
+    }
   }
 
   S.dhMatchups = dh;
   return dh;
 }
-
-// Find one perfect matching via deterministic backtracking.
-// Smallest unmatched vertex is always chosen as pivot for stable results.
 function findPerfectMatching(edges) {
   if (!edges.length) return [];
   const verts = [...new Set(edges.flatMap(([a,b]) => [a,b]))].sort((a,b) => a-b);
