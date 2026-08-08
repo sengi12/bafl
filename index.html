@@ -347,6 +347,7 @@ const S = {
   weekCache: {},     // `${leagueId}:${week}` → {matchups, stats}
   schedCache: {},    // `${leagueId}:sched:${week}` → [matchup,...] (structure only)
   dhMatchups: null,  // null = not computed; {2:[{r1,r2}],...} when computed
+  dhHistory: {},     // exact DH data keyed by season year, loaded from double_headers.json
   allLoadedFor: '',
   playersCache: null,
   seasonStarted: false, // false when league is pre_draft / not yet scheduled
@@ -410,8 +411,12 @@ function buildSeasonPicker(seasons) {
 async function init() {
   try {
     setLoading('Loading league data…');
-    const seasons = await walkSeasonChain();
-    S.seasons = seasons;
+    const [seasons, dhHistory] = await Promise.all([
+      walkSeasonChain(),
+      fetchJ('./double_headers.json').catch(() => ({})),
+    ]);
+    S.seasons   = seasons;
+    S.dhHistory = dhHistory || {};
     buildSeasonPicker(seasons);
     await loadSeason(0);
   } catch(e) {
@@ -617,6 +622,17 @@ async function loadSchedule(week) {
 async function getDHMatchups() {
   if (S.dhMatchups !== null) return S.dhMatchups;
   if (!S.seasonStarted) { S.dhMatchups = {}; return S.dhMatchups; }
+
+  // Use exact historical data when available (keyed by season year, e.g. "2025")
+  // Add entries to double_headers.json to lock in accurate data for past seasons.
+  const histExact = S.dhHistory[String(S.league.season)];
+  if (histExact) {
+    S.dhMatchups = {};
+    for (const [wk, pairs] of Object.entries(histExact)) {
+      S.dhMatchups[parseInt(wk)] = pairs;
+    }
+    return S.dhMatchups;
+  }
 
   const allMatchups = await Promise.all(
     Array.from({length: REGULAR_SEASON_WEEKS}, (_, i) => loadSchedule(i + 1))
