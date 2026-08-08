@@ -41,7 +41,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
   min-width:90px;text-align:center;white-space:nowrap;}
 .dh-dot{display:inline-block;width:7px;height:7px;border-radius:50%;
   background:var(--warn);margin-left:5px;vertical-align:middle;
-  box-shadow:0 0 5px var(--warn);title:"Double Header week";}
+  box-shadow:0 0 5px var(--warn);}
 .hdr-right{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
 .btn-refresh{background:var(--accent);border:none;color:#000;
   border-radius:6px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;transition:all .15s;}
@@ -1219,6 +1219,9 @@ async function renderPlayoffs() {
     setError('Failed to load playoffs: ' + e.message);
   }
 }
+
+// Apply a single matchup result to the standings object
+function applyResult(st, cs, rid1, rid2) {
   if (!st[rid1] || !st[rid2]) return;
   const r = calcResult(cs, rid1, rid2);
   st[rid1].pf += r.s1dec; st[rid1].pa += r.s2dec;
