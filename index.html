@@ -349,6 +349,7 @@ const S = {
   dhMatchups: null,  // null = not computed; {2:[{r1,r2}],...} when computed
   allLoadedFor: '',
   playersCache: null,
+  seasonStarted: false, // false when league is pre_draft / not yet scheduled
   arEnabled: true,
   arTimer: null,
   arCountTimer: null,
@@ -420,9 +421,13 @@ async function loadSeason(idx) {
   for (const u of users)   S.userMap[u.user_id]     = u.display_name;
   for (const r of rosters) S.rosterMap[r.roster_id] = S.userMap[r.owner_id] || `Team ${r.roster_id}`;
 
-  const leg = parseInt(league.settings?.leg || 1);
-  S.currentWeek  = Math.max(1, leg);
-  S.selectedWeek = S.currentWeek;
+  const leg = parseInt(league.settings?.leg || 0);
+  // Detect whether the season has started: status 'in_season', 'post_season',
+  // or 'complete' all mean the schedule exists. Pre-draft / drafting = not started.
+  const status = (league.status || '').toLowerCase();
+  S.seasonStarted = !['pre_draft', 'drafting', ''].includes(status) && leg > 0;
+  S.currentWeek   = S.seasonStarted ? Math.max(1, leg) : 1;
+  S.selectedWeek  = S.currentWeek;
 
   document.getElementById('seasonSel').value    = String(idx);
   document.getElementById('seasonSel').disabled = false;
@@ -590,6 +595,8 @@ async function loadSchedule(week) {
 // Result is always identical for a given season’s schedule.
 async function getDHMatchups() {
   if (S.dhMatchups !== null) return S.dhMatchups;
+  // Short-circuit for unstarted seasons — no schedule data to analyze
+  if (!S.seasonStarted) { S.dhMatchups = {}; return S.dhMatchups; }
 
   const allMatchups = await Promise.all(
     Array.from({length: REGULAR_SEASON_WEEKS}, (_, i) => loadSchedule(i + 1))
@@ -885,6 +892,10 @@ function matchupCard(rid1, rid2, cs) {
 
 // ─── Render: Matchups tab ─────────────────────────────────────────────────
 async function renderMatchups() {
+  if (!S.seasonStarted) {
+    setPage('<div class="empty-box">This season hasn’t started yet. Check back after the draft!</div>');
+    return;
+  }
   setLoading('Loading week data…');
   try {
     const { matchups, stats } = await loadWeek(S.selectedWeek);
@@ -931,6 +942,10 @@ async function renderMatchups() {
 
 // ─── Render: Standings tab ────────────────────────────────────────────────
 async function renderStandings() {
+  if (!S.seasonStarted) {
+    setPage('<div class="empty-box">This season hasn’t started yet. Check back after the draft!</div>');
+    return;
+  }
   const rsWeek = Math.min(S.currentWeek, REGULAR_SEASON_WEEKS);
   setLoading('Calculating standings…', `Loading weeks 1–${rsWeek}…`);
   try {
@@ -1199,6 +1214,10 @@ async function renderPlayoffs() {
 
 // ─── Render: Leaders tab ──────────────────────────────────────────────────
 async function renderLeaders() {
+  if (!S.seasonStarted) {
+    setPage('<div class="empty-box">This season hasn’t started yet. Check back after the draft!</div>');
+    return;
+  }
   const rsWeek = Math.min(S.currentWeek, REGULAR_SEASON_WEEKS);
   setLoading('Calculating leaders…', `Loading weeks 1–${rsWeek}…`);
   try {
