@@ -1,0 +1,28 @@
+/* ── Header ── */
+.header{background:var(--surface);border-bottom:1px solid var(--border);
+  padding:9px 18px;display:flex;align-items:center;gap:12px;
+  position:sticky;top:0;z-index:200;flex-wrap:wrap;}
+.logo{font-size:17px;font-weight:900;color:var(--accent);letter-spacing:-.5px;
+  display:inline-flex;align-items:center;gap:7px;white-space:nowrap;}
+.logo span{color:var(--text);}
+.season-tag{font-size:11px;font-weight:700;color:var(--muted);
+  background:var(--surface2);border:1px solid var(--border);
+  padding:3px 9px;border-radius:5px;white-space:nowrap;}
+.week-nav{display:flex;align-items:center;gap:6px;margin-left:auto;}
+.week-nav button{background:var(--surface2);border:1px solid var(--border);
+  color:var(--text);border-radius:6px;padding:4px 11px;font-size:13px;
+  font-weight:800;cursor:pointer;transition:all .15s;line-height:1;}
+.week-nav button:hover{border-color:var(--accent);color:var(--accent);}
+.week-nav button:disabled{opacity:.35;cursor:not-allowed;pointer-events:none;}
+.week-label{font-size:13px;font-weight:800;color:var(--text);
+  min-width:90px;text-align:center;white-space:nowrap;}
+.dh-dot{display:inline-block;width:7px;height:7px;border-radius:50%;
+  background:var(--warn);margin-left:5px;vertical-align:middle;
+  box-shadow:0 0 5px var(--warn);}
+.hdr-right{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.btn-refresh{background:var(--accent);border:none;color:#000;
+  border-radius:6px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;transition:all .15s;}
+.btn-refresh:hover{background:#5aadff;}
+.btn-refresh:disabled{opacity:.5;cursor:not-allowed;}
+.updated-tag{font-size:10px;color:var(--muted);white-space:nowrap;}
+

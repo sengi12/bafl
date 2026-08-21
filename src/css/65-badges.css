@@ -1,0 +1,14 @@
+/* ── Position badges ── */
+.pos-badge{font-size:9px;font-weight:900;padding:2px 6px;border-radius:4px;
+  letter-spacing:.4px;flex:none;white-space:nowrap;}
+.pos-QB{background:rgba(255,77,106,.18);color:var(--qb);}
+.pos-RB{background:rgba(0,207,159,.18);color:var(--rb);}
+.pos-WR{background:rgba(86,165,255,.18);color:var(--wr);}
+.pos-TE{background:rgba(255,201,77,.18);color:var(--te);}
+.pos-K{background:rgba(168,85,247,.18);color:var(--k);}
+.pos-DEF,.pos-DB,.pos-DL,.pos-LB,.pos-OL,.pos-S{background:rgba(185,138,99,.18);color:#b98a63;}
+
+/* ── Team name link ── */
+.team-link{cursor:pointer;border-bottom:1px dotted rgba(255,255,255,.2);transition:color .12s;}
+.team-link:hover{color:var(--accent);border-bottom-color:var(--accent);}
+

@@ -1,0 +1,6 @@
+# Local scratch from browser testing
+_test*.html
+_frame.html
+_fix/
+__pycache__/
+.DS_Store

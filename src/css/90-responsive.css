@@ -1,0 +1,75 @@
+/* ── Mobile / responsive ─────────────────────────────────────────────────────
+   The page itself never scrolls sideways (see 00-base.css). Everything wide instead lives in
+   its own .table-scroll / .pc-table-scroll / .mc-table-scroll / .bkt-scroll container, so on a
+   phone content is reachable by scrolling THAT element rather than being clipped by the page
+   guard — which is what used to happen to the standings' stat columns and the matchup card's
+   right-hand score. */
+.page,.page>*{min-width:0;max-width:100%;}
+
+@media(max-width:760px){
+  .matchups-grid{grid-template-columns:1fr;}
+  .leaders-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .header{padding:8px 10px;gap:7px;}
+  .page{padding:14px 12px 50px;}
+  .week-label{min-width:64px;font-size:12px;}
+  .tabs{padding:0 10px;}
+  .tab{padding:10px 14px;}
+
+  /* Matchup card: names now sit in their own flex header, so they get the full row width and
+     simply ellipsis instead of forcing the table wide. */
+  .mc-head{padding:9px 10px;gap:6px;}
+  .mc-team{font-size:12px;}
+  .mc-score{font-size:18px;min-width:18px;}
+  .mc-val{padding:7px 8px;font-size:12px;min-width:50px;}
+  .mc-cat{font-size:11px;padding:7px 5px;}
+  .mc-chk{width:22px;min-width:22px;}
+  .proj-bar{padding:5px 10px;gap:6px;}
+  .proj-swing{margin-left:0;width:100%;}
+
+  /* Standings: tighter padding, and the frozen TEAM column gets a hard cap so the category
+     grid has room to scroll beside it rather than being pushed off entirely. */
+  .stbl th,.stbl td{padding:8px 9px;}
+  .stbl .s-rank{width:44px;}
+  .stbl th:nth-child(1),.stbl td:nth-child(1){width:44px;min-width:44px;}
+  .stbl th:nth-child(2),.stbl td:nth-child(2){left:44px;}
+  .stbl .s-team{max-width:112px;}
+  .divider-lbl{display:none;}
+  .s-cat{font-size:11px;}
+
+  /* Player card fills the screen as a sheet, which is also what makes swipe-to-close read as
+     the natural dismissal. */
+  .pc-overlay{padding:0;align-items:flex-end;}
+  .pc{max-height:94vh;border-radius:16px 16px 0 0;width:100%;}
+  .pc-hero{padding:14px 13px 12px;gap:11px;}
+  .pc-hero-img,.pc-hero-img-err{width:60px;height:60px;}
+  .pc-name{font-size:16.5px;}
+  .pc-meta{gap:11px;margin-top:8px;}
+  .pc-meta-val{font-size:11px;max-width:88px;}
+  .pc-body{padding:9px 10px 18px;}
+  .pc-tabs,.pc-seasons{padding-left:10px;padding-right:10px;}
+  .lineup-cat-summary{grid-template-columns:repeat(2,minmax(0,1fr));}
+
+  .ps-overlay{padding:0;align-items:flex-end;}
+  .ps-modal{width:100%;border-radius:14px 14px 0 0;max-height:88vh;}
+}
+
+/* Two columns of player rows — headshot, name, owner, value — is too cramped to read below
+   this, so the player view drops to one column earlier than the team view needs to. */
+@media(max-width:560px){
+  .leaders-grid{grid-template-columns:1fr;}
+}
+@media(max-width:420px){
+  .page{padding:11px 9px 44px;}
+  .logo{font-size:15px;}
+  .updated-tag{display:none;}          /* the ↻ countdown already says how fresh this is */
+  .ar-toggle{padding:4px 7px;}
+  .mc-val{min-width:44px;padding:7px 6px;}
+  .lineup-cat-summary{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+
+/* Landscape phones are short, not narrow — give the sheets back their vertical room. */
+@media(max-height:520px){
+  .pc{max-height:98vh;}
+  .ps-modal{max-height:96vh;}
+  .ps-overlay{padding-top:10px;}
+}

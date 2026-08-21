@@ -1,0 +1,12 @@
+/* ── Live matchup projections ── */
+.proj-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:6px 12px;background:rgba(61,155,255,.07);
+  border-bottom:1px solid rgba(61,155,255,.18);}
+.proj-lbl{font-size:8.5px;font-weight:900;letter-spacing:1px;color:var(--accent);
+  text-transform:uppercase;flex:none;}
+.proj-score{font-family:var(--mono);font-size:13px;font-weight:900;color:var(--text);flex:none;}
+.proj-dash{color:var(--muted);margin:0 2px;font-weight:700;}
+.proj-swing{font-size:10px;font-weight:700;color:var(--warn);
+  background:rgba(210,153,34,.12);border:1px solid rgba(210,153,34,.28);
+  border-radius:5px;padding:1px 7px;margin-left:auto;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;max-width:100%;}

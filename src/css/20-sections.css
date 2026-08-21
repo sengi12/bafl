@@ -1,0 +1,13 @@
+/* ── Section heading ── */
+.sec-head{font-size:10px;font-weight:800;color:var(--muted);letter-spacing:1.2px;
+  text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:10px;}
+.sec-head::after{content:'';flex:1;height:1px;background:var(--border);order:1;}
+/* The divider is a ::after, so it is always the LAST child. Ordering pulls it back in front of
+   any control appended to the heading, giving: label — rule — control. */
+.sec-head .seg{order:2;}
+.sec-spacer{margin-top:30px;}
+.dh-badge{font-size:9px;font-weight:900;color:var(--warn);
+  background:rgba(210,153,34,.15);border:1px solid rgba(210,153,34,.3);
+  padding:2px 7px;border-radius:4px;letter-spacing:.5px;}
+
+.sec-note{font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;color:var(--muted);}

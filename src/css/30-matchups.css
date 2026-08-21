@@ -1,0 +1,47 @@
+/* ── Matchup grid ── */
+.matchups-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:14px;}
+
+/* ── Matchup card ────────────────────────────────────────────────────────────
+   Team names live in a flex header ABOVE the table, not as <th> cells inside it. When they
+   were table cells, one row had to fit score + name + "Categories" + name + score across the
+   viewport — which overflowed a 360px phone and, because the page clips horizontal overflow,
+   put the right-hand score somewhere you could never scroll to. Out here the names ellipsis
+   independently and the table is left with five narrow columns that fit anywhere. */
+.mc{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;}
+.mc-head{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--surface2);
+  border-bottom:1px solid var(--border);}
+.mc-side{display:flex;align-items:center;gap:8px;flex:1;min-width:0;}
+.mc-side-r{justify-content:flex-end;}
+.mc-team{font-size:13px;font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.mc-score{font-family:var(--mono);font-size:21px;font-weight:900;line-height:1;flex:none;
+  min-width:22px;text-align:center;}
+.mc-score.win{color:var(--success);}
+.mc-score.loss{color:var(--muted);}
+.mc-score.tie{color:var(--warn);}
+.mc-vs{font-size:9px;font-weight:800;color:var(--muted);letter-spacing:1px;
+  text-transform:uppercase;flex:none;padding:0 2px;}
+
+.mc-table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;}
+.mc-tbl{width:100%;border-collapse:separate;border-spacing:0;}
+.mc-tbl tr{border-top:1px solid var(--border);}
+.mc-tbl tbody tr:hover{background:var(--surface2);}
+.mc-tbl td{border-top:1px solid var(--border);}
+.mc-chk{width:26px;min-width:26px;text-align:center;padding:7px 2px;}
+.mc-tick{color:var(--success);font-size:15px;font-weight:900;}
+.mc-pchk{color:var(--accent);font-size:12px;font-weight:900;opacity:.85;}
+.mc-val{text-align:left;font-family:var(--mono);font-size:13px;font-weight:700;
+  padding:7px 10px;min-width:56px;white-space:nowrap;}
+.mc-val-r{text-align:right;}
+/* The projected-finish line sits under each live value rather than beside it, so adding
+   projections costs the card no horizontal room at all. */
+.mc-proj{display:block;font-size:9.5px;font-weight:700;color:var(--accent);opacity:.8;
+  letter-spacing:.2px;margin-top:1px;}
+.mc-cat{text-align:center;font-size:11.5px;color:var(--muted);font-weight:600;
+  padding:7px 6px;white-space:nowrap;
+  /* Frozen so a long category label can never push the values out of reach on a small screen. */
+  position:sticky;left:0;background:var(--surface);z-index:1;}
+.mc-tbl tbody tr:hover .mc-cat{background:var(--surface2);}
+.mc-total{background:rgba(255,255,255,.025);}
+.mc-total td{border-top:2px solid var(--border)!important;}
+.mc-total .mc-cat{color:var(--text);font-weight:800;background:#1a2029;}
+.mc-total .mc-val{color:var(--text);font-weight:800;}

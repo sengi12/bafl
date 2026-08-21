@@ -1,0 +1,64 @@
+:root{
+  --bg:#0d1117;--surface:#161b22;--surface2:#1c2330;--surface3:#212936;
+  --border:#2d3748;--border2:#374151;
+  --accent:#3d9bff;
+  --text:#e6edf3;--muted:#7d8590;
+  --success:#3fb950;--warn:#d29922;--danger:#f85149;
+  --qb:#ff4d6a;--rb:#00cf9f;--wr:#56a5ff;--te:#ffc94d;--k:#a855f7;
+  --font:'Inter','SF Pro Display',system-ui,sans-serif;
+  --mono:'JetBrains Mono','SF Mono','Fira Code',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{max-width:100%;overflow-x:hidden;}
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;font-size:14px;}
+
+/* ── Horizontal scroll container ─────────────────────────────────────────────
+   The page is overflow-x:hidden so a single too-wide child can't make the whole document pan
+   sideways on touch. That guard has a sharp edge: anything genuinely wider than the viewport
+   is CLIPPED and unreachable rather than scrollable. So every wide thing — tables, brackets,
+   game logs — goes inside one of these instead, and scrolls within its own bounds.
+
+   `border-collapse:separate;border-spacing:0` on the tables inside is REQUIRED, not cosmetic:
+   under `collapse` a cell's borders belong to the table rather than the cell, so a sticky
+   (frozen) column's borders smear or vanish while scrolling. With zero spacing the layout is
+   pixel-identical to collapse. */
+.table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;}
+.table-scroll table{border-collapse:separate;border-spacing:0;}
+
+/* ── Page-scroll lock ────────────────────────────────────────────────────────
+   Applied to <html> while any overlay is open. Setting body{overflow:hidden} alone is not
+   enough on iOS: the backdrop still runs pull-to-refresh and rubber-band scroll behind the
+   overlay. Locking the root element and pairing it with overscroll-behavior on the overlay
+   itself is what actually stops both. overflow:hidden does not reset scrollTop, so the page
+   is exactly where it was when the overlay closes. */
+html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavior:none;}
+
+/* ── Toast ── */
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(14px);
+  background:var(--surface2);border:1px solid var(--border);border-radius:9px;
+  padding:9px 15px;font-size:12.5px;font-weight:700;color:var(--text);
+  box-shadow:0 10px 34px rgba(0,0,0,.5);z-index:900;
+  opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;max-width:calc(100vw - 32px);}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* ── Segmented control (Teams / Players) ── */
+.seg{display:inline-flex;gap:2px;background:var(--surface2);border:1px solid var(--border);
+  border-radius:7px;padding:2px;margin-left:auto;flex:none;}
+.seg-btn{background:none;border:none;color:var(--muted);font-family:var(--font);
+  font-size:10px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;
+  padding:4px 10px;border-radius:5px;cursor:pointer;transition:all .13s;white-space:nowrap;}
+.seg-btn:hover{color:var(--text);}
+.seg-btn.active{background:var(--accent);color:#08121f;}
+
+/* ── Headshot fallback placeholder ───────────────────────────────────────────
+   Revealed by imgFallback() only once every source URL in the chain has 404'd, so a player
+   with no photo anywhere still reads as a person rather than a broken image. */
+.hs-err{display:none;align-items:center;justify-content:center;
+  background:var(--surface3);border:1px solid var(--border);
+  font-weight:900;color:var(--muted);flex:none;}
+
+/* ── Icon button ── */
+.btn-icon{background:var(--surface2);border:1px solid var(--border);color:var(--muted);
+  border-radius:6px;width:28px;height:26px;font-size:12px;cursor:pointer;transition:all .15s;
+  display:inline-flex;align-items:center;justify-content:center;flex:none;line-height:1;}
+.btn-icon:hover{border-color:var(--accent);color:var(--accent);}

@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<!--
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  GENERATED FILE — DO NOT EDIT index.html DIRECTLY.                      │
+  │                                                                         │
+  │  The source lives in src/ (index.template.html + css/*.css + js/*.js).  │
+  │  Rebuild with:   python3 build.py                                       │
+  │  Verify with:    python3 build.py --check                               │
+  │                                                                         │
+  │  Edits made here are silently discarded by the next build.              │
+  └─────────────────────────────────────────────────────────────────────────┘
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BAFL — Bad Ass Football League</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏈</text></svg>">
+<meta name="theme-color" content="#0d1117">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+@@CSS_PARTIALS@@
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">🏈 <span>BAFL</span></div>
+  <select id="seasonSel" class="season-sel" onchange="switchSeason(this.value)" disabled>
+    <option>Loading…</option>
+  </select>
+  <div class="week-nav">
+    <button id="btnPrev" onclick="changeWeek(-1)" disabled>‹</button>
+    <span class="week-label" id="weekLabel">—</span>
+    <button id="btnNext" onclick="changeWeek(1)" disabled>›</button>
+  </div>
+  <div class="hdr-right">
+    <button class="btn-icon" id="btnSearch" onclick="openPlayerSearch()"
+            title="Search players — see who rosters anyone" aria-label="Search players">🔍</button>
+    <div class="ar-wrap">
+      <button class="ar-toggle" id="btnAR" onclick="toggleAutoRefresh()" title="Auto-refresh every 5 min">↻ Auto</button>
+      <span class="ar-countdown" id="arCountdown"></span>
+    </div>
+    <button class="btn-refresh" id="btnRefresh" onclick="refresh()" disabled>Refresh</button>
+    <span class="updated-tag" id="updatedTag"></span>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" data-tab="matchups" onclick="setTab(this)">Matchups</button>
+  <button class="tab" data-tab="standings" onclick="setTab(this)">Standings</button>
+  <button class="tab" data-tab="leaders" onclick="setTab(this)">Leaders</button>
+  <button class="tab" data-tab="playoffs" onclick="setTab(this)">Playoffs</button>
+</div>
+
+<div class="page" id="page">
+  <div class="loading"><div class="spin"></div><div class="loading-label">Loading league data…</div></div>
+</div>
+
+<!-- Roster popup modal -->
+<div class="roster-overlay" id="rosterOverlay" onclick="closeRosterModal()">
+  <div class="roster-modal" onclick="event.stopPropagation()">
+    <div class="roster-modal-head">
+      <span class="roster-modal-title" id="rosterModalTitle"></span>
+      <button class="roster-modal-close" onclick="closeRosterModal()">✕</button>
+    </div>
+    <div class="roster-modal-body" id="rosterModalBody"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+@@JS_PARTIALS@@
+</script>
+</body>
+</html>

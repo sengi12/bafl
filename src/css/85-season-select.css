@@ -1,0 +1,10 @@
+/* ── Season selector ── */.season-sel{background:var(--surface2);border:1px solid var(--border);color:var(--text);
+  border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer;
+  font-family:var(--font);max-width:130px;}
+.season-sel:hover{border-color:var(--accent);}
+.season-sel:disabled{opacity:.4;cursor:not-allowed;}
+.season-sel option{background:var(--surface2);color:var(--text);}
+.past-season-note{font-size:10px;color:var(--warn);background:rgba(210,153,34,.1);
+  border:1px solid rgba(210,153,34,.25);border-radius:6px;padding:6px 11px;
+  margin-bottom:14px;display:flex;align-items:center;gap:6px;}
+

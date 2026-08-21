@@ -1,0 +1,33 @@
+/* ── Leaders ── */
+/* minmax(0,...) not minmax(310px,...): a grid item's default min-width is `auto`, i.e. its
+   content, so a card holding a nowrap value like "3,437 yds" refuses to shrink and pushes the
+   whole track past the viewport. The explicit 0 minimum lets the ellipsis rules inside actually
+   take effect. */
+.leaders-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(310px,100%),1fr));gap:14px;}
+.lcard{min-width:0;}
+.lcard{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 15px;}
+.lcard-title{font-size:10px;font-weight:800;color:var(--accent);text-transform:uppercase;
+  letter-spacing:.7px;margin-bottom:11px;}
+.lrow{display:flex;align-items:center;gap:9px;padding:6px 0;
+  border-bottom:1px solid rgba(255,255,255,.04);font-size:12.5px;min-width:0;}
+.lrow:last-child{border-bottom:none;}
+.lrow-empty{color:var(--muted);font-size:11px;font-style:italic;justify-content:center;padding:10px 0;}
+.lrank{font-family:var(--mono);font-size:11px;font-weight:800;color:var(--muted);width:16px;flex:none;}
+.lrank.r1{color:#f4c04a;}
+.lrank.r2{color:#c0c0c0;}
+.lrank.r3{color:#cd7f32;}
+.lname{flex:1;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+.lval{font-family:var(--mono);font-weight:800;color:var(--accent);font-size:13px;
+  white-space:nowrap;flex:none;}
+.leaders-note{font-size:10.5px;color:var(--muted);margin:-4px 0 14px;line-height:1.45;max-width:70ch;}
+
+/* Player rows carry a headshot, position badge and BAFL owner, and open the player card. */
+.lrow-player{cursor:pointer;border-radius:7px;padding:6px 5px;margin:0 -5px;transition:background .12s;}
+.lrow-player:hover{background:var(--surface2);}
+.lhs{width:26px;height:26px;border-radius:50%;object-fit:cover;object-position:top center;
+  background:var(--surface3);border:1px solid var(--border);flex:none;}
+.lhs-err{width:26px;height:26px;border-radius:50%;font-size:10px;}
+.lname-block{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.lsub{display:flex;align-items:center;gap:5px;font-size:9.5px;color:var(--muted);min-width:0;}
+.lowner{font-weight:700;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
+.lgames{font-family:var(--mono);font-weight:700;opacity:.75;flex:none;margin-left:auto;}
