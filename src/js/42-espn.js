@@ -73,8 +73,7 @@ async function fetchEspnGamelog(aid, league, season) {
   const key = `${league}:${aid}:${season || '_'}`;
   if (espnGamelogCache[key]) return espnGamelogCache[key];
   const data = await fetchJ(ESPN_GAMELOG_URL(league, aid, season));
-  espnGamelogCache[key] = data;
-  return data;
+  return cachePut(espnGamelogCache, key, data, 80);
 }
 
 // Normalize ESPN's core-athlete `draft` object. {undrafted:true} means the record loaded but

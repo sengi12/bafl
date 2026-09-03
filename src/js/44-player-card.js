@@ -17,6 +17,10 @@
 //    group is the player's BAFL CATEGORY CONTRIBUTION for that game — passing yards net of the
 //    interception penalty, rush yards, receiving yards, total TDs, kicking points — graded
 //    green/yellow/red against per-position, per-game benchmarks. The raw box score follows.
+//
+// The card's LAYOUT and mobile behaviour (never off screen, nothing scrolls behind it, swipe
+// to dismiss, sticky game-log headers) are shared with TripleCrown — see the sizing contract
+// at the top of 72-player-card.css and the scroll guard in 07-viewport-guard.js.
 // ═══════════════════════════════════════════════════════════════════════════
 
 // Which BAFL categories a position actually contributes to, and what a good game looks like
@@ -163,6 +167,12 @@ function pcLockPage(on) {
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && PC) closePlayerCard(); });
 
 // ─── Shell ────────────────────────────────────────────────────────────────
+// Sleeper-style hero, shared with TripleCrown: an injury BANNER across the top; the name
+// stacked on two lines beside a big headshot anchored to the hero's bottom edge on the flat
+// team colour; the BAFL owner as a chip under the name; and a FOOT row — a slanted team plate
+// (nickname · pos · code · jersey) under the headshot with the draft band beside it. Every
+// dimension is a clamp() of the viewport width (72-player-card.css), which is what lets one
+// layout serve a 360px phone and a desktop window without a breakpoint.
 function renderPcShell(pid, p) {
   const name = p.name || 'Player';
   const pos = (p.pos || '').toUpperCase();
@@ -171,44 +181,72 @@ function renderPcShell(pid, p) {
   const exp = p.years_exp != null ? (p.years_exp === 0 ? 'R' : p.years_exp) : '–';
   const jersey = (p.number != null && p.number !== '') ? `#${p.number}` : '';
   // A few club primaries (PIT gold, NO gold) are light enough that white hero text vanishes
-  // on them — darken those rather than special-casing the text color.
+  // on them — darken those rather than special-casing the text color. Then every hero gets
+  // pulled a notch toward Sleeper's muted tone; full-saturation team paint reads neon.
   let tc = teamColor(tm);
   if (hexLum(tc) > 0.4) tc = darkenHex(tc, 0.45);
-  const heroStyle = tm ? `background:linear-gradient(135deg, ${tc} 0%, ${tc} 42%, var(--surface) 100%);` : '';
+  tc = darkenHex(tc, 0.16);
+  const heroStyle = tm ? `background:${tc};` : '';
 
   const meta = (label, val) =>
     `<div class="pc-meta-item"><span class="pc-meta-label">${label}</span>` +
     `<span class="pc-meta-val${(val == null || val === '–' || val === '') ? ' pc-meta-empty' : ''}">${esc(val == null || val === '' ? '–' : val)}</span></div>`;
 
+  const inj = pcInjuryInfo(p);
+  const injBanner = inj
+    ? `<div class="pc-inj-banner pc-inj-${inj.sev}" title="${escAttr(inj.detail || inj.word)}">` +
+      `<span class="pc-inj-dot">${inj.sev === 'q' ? '?' : '!'}</span>${esc(inj.word)}` +
+      `${inj.body ? `<span class="pc-inj-note">· ${esc(inj.body)}</span>` : ''}</div>`
+    : '';
+  const parts = String(name).trim().split(/\s+/);
+  const nameHtml = parts.length > 1
+    ? `<span class="pc-name-l1">${esc(parts[0])}</span><span class="pc-name-l2">${esc(parts.slice(1).join(' '))}</span>`
+    : `<span class="pc-name-l1">${esc(name)}</span>`;
+  const nick = tm ? String(teamDisplayName(tm) || tm).trim().split(/\s+/).slice(-1)[0].toUpperCase() : 'FREE AGENT';
+  const plateSub = [
+    pos ? `<span class="pc-plate-pos pos-${esc(pos)}-t">${esc(pos)}</span>` : '',
+    tm ? esc(tm) : '',
+    jersey ? `<span class="pc-jersey">${esc(jersey)}</span>` : '',
+  ].filter(Boolean).join(' · ');
+
   const html = `
-    <div class="pc" onclick="event.stopPropagation()">
+    <div class="pc" role="dialog" aria-modal="true" aria-label="${escAttr(name)}" onclick="event.stopPropagation()">
       <div class="pc-hero" style="${heroStyle}">
-        <div class="pc-hero-logo" style="${tm ? `background-image:url('${NFL_LOGO(tm)}')` : ''}"></div>
-        ${headshotImg(pid, p, 'pc-hero-img', (name[0] || '?'))}
-        <div class="pc-hero-main">
-          <div class="pc-name">${esc(name)}${jersey ? `<span class="pc-jersey">${esc(jersey)}</span>` : ''}</div>
-          <div class="pc-sub">
-            ${pos ? `<span class="pos-badge pos-${esc(pos)}">${esc(pos)}</span>` : ''}
-            ${tm ? `<span class="pc-team">${esc(teamDisplayName(tm))}</span>` : ''}
+        ${injBanner}
+        <div class="pc-hero-row">
+          <div class="pc-hero-shot">${pcHeroImg(pid, p, name[0] || '?')}</div>
+          <div class="pc-hero-logo" style="${tm ? `background-image:url('${NFL_LOGO(tm)}')` : ''}"></div>
+          <div class="pc-hero-main">
+            <div class="pc-name">${nameHtml}</div>
+            <div class="pc-sub">${pcOwnerChipHTML(pid)}</div>
+            <div class="pc-meta">
+              ${meta('AGE', age)}${meta('HT', fmtHeight(p.height))}
+              ${meta('WT', p.weight ? `${p.weight} lbs` : '–')}
+              ${meta('EXP', exp)}${meta('COLLEGE', p.college || '–')}
+            </div>
           </div>
-          <div class="pc-meta">
-            ${meta('AGE', age)}${meta('HT', fmtHeight(p.height))}
-            ${meta('WT', p.weight ? `${p.weight} lbs` : '–')}
-            ${meta('EXP', exp)}${meta('COLLEGE', p.college || '–')}
+        </div>
+        <div class="pc-hero-foot">
+          <div class="pc-team-plate">
+            <div class="pc-plate-team">${esc(nick)}</div>
+            <div class="pc-plate-sub">${plateSub}</div>
           </div>
           <div class="pc-hero-draft" id="pcHeroDraft"></div>
         </div>
         <button class="pc-close" onclick="closePlayerCard()" aria-label="Close">✕</button>
       </div>
-      ${pcOwnerBandHTML(pid)}
       <div class="pc-tabs" id="pcTabs"></div>
       <div class="pc-seasons" id="pcSeasons"></div>
       <div class="pc-body" id="pcBody"><div class="pc-loading">Loading game logs…</div></div>
     </div>`;
 
   let overlay = document.getElementById('pcOverlay');
-  if (overlay) { overlay.innerHTML = html; }
-  else {
+  if (overlay) {
+    // Re-used for a second player while open (search → card → search → card): undo anything a
+    // swipe-dismiss in flight may have left on the backdrop.
+    overlay.style.transition = ''; overlay.style.background = '';
+    overlay.innerHTML = html;
+  } else {
     overlay = document.createElement('div');
     overlay.id = 'pcOverlay';
     overlay.className = 'pc-overlay';
@@ -220,15 +258,57 @@ function renderPcShell(pid, p) {
   renderPcModeTabs();
 }
 
-// The BAFL-native band: who rosters this player right now, in the season being viewed.
-function pcOwnerBandHTML(pid) {
+// The hero photo. The card's other surfaces use the Sleeper THUMB (small, fast); the hero
+// shows the player at up to 142px tall, so it leads with the full-size cutout and falls back
+// through ESPN's NFL and college shots to the thumb. All are transparent cutouts, which is
+// what lets the photo sit straight on the team colour with no frame.
+function pcHeroImg(pid, p, initial) {
+  const urls = [];
+  const add = u => { const v = String(u || '').trim(); if (v && !urls.includes(v)) urls.push(v); };
+  add(SLEEPER_HEADSHOT(pid));
+  if (p && p.espn_id) { add(ESPN_HEADSHOT('nfl', p.espn_id)); add(ESPN_HEADSHOT('college-football', p.espn_id)); }
+  add(SLEEPER_HEADSHOT_THUMB(pid));
+  return `<img class="pc-hero-img" src="${urls[0]}" alt="" decoding="async"
+    data-fallbacks="${urls.slice(1).join('|')}" onerror="imgFallback(this)">` +
+    `<div class="hs-err pc-hero-img-err">${esc(initial)}</div>`;
+}
+
+// The BAFL-native piece of the hero: who rosters this player right now, in the season being
+// viewed, as a chip under the name. Tapping it opens that roster.
+function pcOwnerChipHTML(pid) {
   const own = ownerOf(pid);
   if (!own) {
-    return `<div class="pc-owner pc-owner-fa"><span class="pc-owner-lbl">BAFL</span>
-      <span class="pc-owner-name">Free agent</span></div>`;
+    return `<span class="pc-own-chip pc-own-fa" title="Not on any BAFL roster this season">` +
+      `<span class="pc-own-lbl">BAFL</span>Free agent</span>`;
   }
-  return `<div class="pc-owner"><span class="pc-owner-lbl">BAFL</span>
-    <span class="pc-owner-name team-link" onclick="closePlayerCard();openRosterModal(${own.rid})">${esc(own.name)}</span></div>`;
+  const rid = Number(own.rid);
+  const title = `Rostered by ${own.name} — open that roster`;
+  return `<span class="pc-own-chip" role="button" tabindex="0" title="${escAttr(title)}"
+    onclick="event.stopPropagation();pcJumpToOwner(${rid})"
+    onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();pcJumpToOwner(${rid});}">` +
+    `<span class="pc-own-lbl">BAFL</span>${esc(own.name)}</span>`;
+}
+function pcJumpToOwner(rid) { closePlayerCard(); openRosterModal(rid); }
+
+// Injury designation from the slim player record, shaped for the banner. Sleeper's status
+// strings vary in case and length ("Questionable", "IR", "Sus", "PUP", "COV", "NA"), so they
+// are reduced to a code first and worded from that.
+function pcInjuryInfo(p) {
+  const st = p && p.injury_status ? String(p.injury_status).trim() : '';
+  if (!st) return null;
+  const code = /^ir/i.test(st) ? 'IR' : /^out/i.test(st) ? 'OUT' : /^doubtful/i.test(st) ? 'D'
+    : /^questionable/i.test(st) ? 'Q' : /^sus/i.test(st) ? 'SUS' : /^pup/i.test(st) ? 'PUP'
+    : /^cov/i.test(st) ? 'COVID' : /^na$/i.test(st) ? 'NA' : /^dnr/i.test(st) ? 'DNR'
+    : st.slice(0, 3).toUpperCase();
+  const sev = code === 'Q' ? 'q' : code === 'D' ? 'd' : 'o';
+  const body = String(p.injury_body_part || '').trim();
+  const note = String(p.injury_note || '').trim();
+  // No structured "season-ending" flag exists on Sleeper, but the note nearly always says it.
+  const seasonOut = /season[-\s]?ending|out for (the )?(season|year)|miss (the )?(rest of the )?(season|year)|lost for the (season|year)/i
+    .test(`${body} ${note}`);
+  const word = { Q: 'QUESTIONABLE', D: 'DOUBTFUL', OUT: 'OUT', IR: seasonOut ? 'IR · OUT FOR SEASON' : 'IR',
+    SUS: 'SUSPENDED', PUP: 'PUP', COVID: 'COVID', NA: 'INACTIVE', DNR: 'DID NOT REPORT' }[code] || code;
+  return { code, sev, word, body, detail: [body, note].filter(Boolean).join(' — ') };
 }
 
 // The draft banner is independent of which season or source tab is showing, so it must NOT be
@@ -332,6 +412,7 @@ async function pcSelectSeason(season, opts) {
     body.innerHTML = renderPcSeason(PC.season, rows, PC.pos) +
       `<div class="pc-src">Per-game stats via Sleeper · category values use BAFL scoring.</div>`;
     applyConsistencyBadge(PC.season, rows, PC.pos);
+    pcEnableStickyStatHeaders();
   }
 }
 
@@ -345,8 +426,7 @@ async function fetchPlayerWeekly(pid, season) {
   const key = `${season}:${pid}`;
   if (S.weeklyCache[key]) return S.weeklyCache[key];
   const data = await fetchJ(SLEEPER_WEEKLY_URL(pid, season));
-  S.weeklyCache[key] = data || {};
-  return S.weeklyCache[key];
+  return cachePut(S.weeklyCache, key, data || {}, 120);
 }
 
 // ─── Row building ─────────────────────────────────────────────────────────
@@ -650,57 +730,124 @@ async function loadPcEspn(league) {
     for (const { season, gl } of perSeason) if (gl) out += renderEspnSeason(season, gl, league);
     if (!out) out = `<div class="pc-empty">No ${isCollege ? 'college ' : ''}game data found for this player.</div>`;
     else out += `<div class="pc-src">${isCollege ? 'College' : 'NFL'} per-game stats via ESPN · AVG shown as YPC.</div>`;
-    if (body) body.innerHTML = out;
+    if (body) { body.innerHTML = out; pcEnableStickyStatHeaders(); }
   } catch {
     if (body) body.innerHTML = pcRetryHTML(`Couldn't load ${isCollege ? 'college ' : ''}game logs.`);
   }
 }
 
+// ─── Sticky game-log headers ──────────────────────────────────────────────
+// .pc-body is the scroller; each season's table sits inside its own horizontal wrapper. A
+// CSS position:sticky thead can't reach past that wrapper to the body, so the header is
+// moved by hand: on every body scroll, each thead is translated down by exactly how far its
+// table has passed under the body's top edge, clamped so it never leaves its own table.
+// Reads are batched before writes (the old read→write→read alternation forced a layout pass
+// per table per tick) and the whole thing is coalesced to one frame — iOS fires scroll far
+// faster than it paints during momentum.
+let _pcStickyRaf = 0;
+let _pcStickyResizeBound = false;
+
+function pcRefreshStickyStatHeaders() {
+  _pcStickyRaf = 0;
+  const body = document.getElementById('pcBody');
+  if (!body || typeof body.getBoundingClientRect !== 'function') return;
+  const stickyTop = body.getBoundingClientRect().top;
+  const jobs = [];
+  body.querySelectorAll('.pc-table-scroll').forEach(wrap => {
+    const table = wrap.querySelector('.pc-table');
+    const thead = table && table.tHead;
+    if (!thead || !thead.rows || !thead.rows.length) return;
+    const wrapRect = wrap.getBoundingClientRect();
+    let headerHeight = 0;
+    for (let i = 0; i < thead.rows.length; i++) headerHeight += (thead.rows[i].getBoundingClientRect().height || 0);
+    const maxOffset = Math.max(0, (wrapRect.bottom - wrapRect.top) - headerHeight);
+    const offset = Math.max(0, Math.min(maxOffset, stickyTop - wrapRect.top));
+    jobs.push([thead, offset]);
+  });
+  jobs.forEach(([thead, offset]) => { thead.style.transform = offset > 0 ? `translateY(${offset}px)` : ''; });
+}
+function pcScheduleStickyStatHeaders() {
+  if (_pcStickyRaf) return;
+  _pcStickyRaf = (typeof requestAnimationFrame === 'function')
+    ? requestAnimationFrame(pcRefreshStickyStatHeaders)
+    : setTimeout(pcRefreshStickyStatHeaders, 16);
+}
+// Called after every body render. The overlay — and with it #pcBody — is rebuilt per card, so
+// the scroll listener binds PER ELEMENT; a module-wide "already bound" flag would attach it to
+// the first card only and every card after that would lose its headers.
+function pcEnableStickyStatHeaders() {
+  const body = document.getElementById('pcBody');
+  if (!body) return;
+  if (!body._pcStickyBound) {
+    body._pcStickyBound = true;
+    body.addEventListener('scroll', pcScheduleStickyStatHeaders, { passive: true });
+  }
+  if (!_pcStickyResizeBound) {
+    window.addEventListener('resize', pcScheduleStickyStatHeaders, { passive: true });
+    _pcStickyResizeBound = true;   // the window listener really is once per session
+  }
+  pcScheduleStickyStatHeaders();
+}
+
 // ─── Swipe-down to close ──────────────────────────────────────────────────
 // Standard mobile sheet behaviour. The drag must START ON THE HERO: that region doesn't
 // scroll, so a downward swipe there is unambiguous, whereas starting inside the body would
-// fight the game log's own scrolling. touchmove is deliberately NON-passive — a passive
-// listener can't preventDefault, which would leave the browser running pull-to-refresh and
-// background scroll underneath the drag.
+// fight the game log's own scrolling (a scrollTop check still misbehaves with momentum and
+// overscroll on iOS). The card follows the finger 1:1 — no resistance, no fading — and past
+// the threshold it keeps going and slides off the BOTTOM of the screen from wherever the
+// finger let go, Sleeper-style, while the backdrop fades. Pointer events aren't used: they'd
+// also capture mouse drags on desktop, where the ✕ is the right affordance.
 function attachPcSwipe(cardEl) {
   if (!cardEl || cardEl._swipeWired) return;
   cardEl._swipeWired = true;
-  const CLOSE_AT = 90;
+  const CLOSE_AT = 110;   // px dragged before it dismisses
   let y0 = null, dy = 0, dragging = false;
+  const reset = anim => {
+    cardEl.style.transition = anim ? 'transform .18s ease-out' : '';
+    cardEl.style.transform = '';
+    if (anim) setTimeout(() => { cardEl.style.transition = ''; }, 200);
+  };
 
   cardEl.addEventListener('touchstart', e => {
     if (e.touches.length !== 1) { dragging = false; y0 = null; return; }
     const t = e.target;
     const onHero = t && t.closest && t.closest('.pc-hero');
-    const onControl = t && t.closest && t.closest('.pc-close');
+    const onControl = t && t.closest && t.closest('.pc-close,.pc-own-chip');
     if (!onHero || onControl) { dragging = false; y0 = null; return; }
     y0 = e.touches[0].clientY; dy = 0; dragging = true;
     cardEl.style.transition = '';
   }, { passive: true });
 
+  // NON-passive on purpose. A passive listener cannot call preventDefault(), which would leave
+  // the browser running its own gesture underneath the drag — pull-to-refresh at the top of
+  // the page, and scrolling the content behind the card. Claiming the gesture stops both.
   cardEl.addEventListener('touchmove', e => {
     if (!dragging || y0 == null) return;
     dy = e.touches[0].clientY - y0;
-    if (dy <= 0) { cardEl.style.transform = ''; cardEl.style.opacity = ''; return; }
-    if (e.cancelable) e.preventDefault();   // we own this gesture now
-    // Resistance, so the card feels attached rather than free-falling.
-    const shift = dy < CLOSE_AT ? dy * 0.7 : CLOSE_AT * 0.7 + (dy - CLOSE_AT) * 0.35;
-    cardEl.style.transform = `translateY(${shift.toFixed(1)}px)`;
-    cardEl.style.opacity = String(Math.max(0.55, 1 - dy / 600));
+    if (dy <= 0) { cardEl.style.transform = ''; return; }
+    if (e.cancelable) e.preventDefault();
+    cardEl.style.transform = `translateY(${dy.toFixed(1)}px)`;
   }, { passive: false });
 
   const finish = () => {
     if (!dragging) return;
     dragging = false; y0 = null;
-    cardEl.style.opacity = '';
-    if (dy > CLOSE_AT) closePlayerCard();
-    else {
-      cardEl.style.transition = 'transform .18s ease-out';
-      cardEl.style.transform = '';
-      setTimeout(() => { cardEl.style.transition = ''; }, 200);
-    }
+    if (dy > CLOSE_AT) pcDismissFrom(cardEl, dy);
+    else reset(true);
     dy = 0;
   };
   cardEl.addEventListener('touchend', finish, { passive: true });
   cardEl.addEventListener('touchcancel', finish, { passive: true });
+}
+
+// The slide-off. Duration scales with the distance left to travel so a card released near the
+// bottom doesn't crawl; the overlay fades in step and the real close runs once both are done.
+function pcDismissFrom(cardEl, dy) {
+  const vh = window.innerHeight || 800;
+  const rest = Math.max(200, vh - dy);
+  cardEl.style.transition = `transform ${Math.min(0.32, rest / 1600).toFixed(2)}s ease-in`;
+  cardEl.style.transform = `translateY(${vh + 60}px)`;
+  const ov = document.getElementById('pcOverlay');
+  if (ov) { ov.style.transition = 'background .25s ease'; ov.style.background = 'rgba(0,0,0,0)'; }
+  setTimeout(closePlayerCard, 300);
 }

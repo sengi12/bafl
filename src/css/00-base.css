@@ -7,10 +7,28 @@
   --qb:#ff4d6a;--rb:#00cf9f;--wr:#56a5ff;--te:#ffc94d;--k:#a855f7;
   --font:'Inter','SF Pro Display',system-ui,sans-serif;
   --mono:'JetBrains Mono','SF Mono','Fira Code',monospace;
+  /* Layering ladder. A toast must never be buried under the surface it's reporting on. */
+  --z-roster:500;--z-card:900;--z-search:950;--z-toast:2000;
+  /* The VISIBLE viewport height, which every overlay in the app sizes itself from.
+     100vh on iOS includes the strip behind the collapsing URL bar, so anything sized by it can
+     hang off the bottom of the screen with its close button out of reach. dvh fixes the
+     toolbar but not the on-screen keyboard. 07-viewport-guard.js overwrites this with the
+     measured visualViewport height (in px) at boot and on every resize, which tracks both;
+     the values here are only the pre-JS defaults. */
+  --vvh:100vh;
 }
+@supports (height:100dvh){:root{--vvh:100dvh;}}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{max-width:100%;overflow-x:hidden;}
 body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;font-size:14px;}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;}
+}
+/* iOS zooms the whole page when a focused text control's computed font-size is under 16px —
+   and never zooms back out, leaving the layout cropped. Only touch devices pay this. */
+@media (pointer:coarse){
+  .ps-input{font-size:16px;}
+}
 
 /* ── Horizontal scroll container ─────────────────────────────────────────────
    The page is overflow-x:hidden so a single too-wide child can't make the whole document pan
@@ -30,14 +48,20 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
    enough on iOS: the backdrop still runs pull-to-refresh and rubber-band scroll behind the
    overlay. Locking the root element and pairing it with overscroll-behavior on the overlay
    itself is what actually stops both. overflow:hidden does not reset scrollTop, so the page
-   is exactly where it was when the overlay closes. */
+   is exactly where it was when the overlay closes.
+
+   This is the declarative half. The other half is the document-level touchmove guard in
+   07-viewport-guard.js, which cancels any gesture that doesn't land in a genuinely scrollable
+   region of the open overlay — the case CSS can't express, and the one that used to let the
+   page creep behind a card on older iOS builds. */
 html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavior:none;}
 
 /* ── Toast ── */
-#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(14px);
+#toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom, 0px));
+  transform:translateX(-50%) translateY(14px);
   background:var(--surface2);border:1px solid var(--border);border-radius:9px;
   padding:9px 15px;font-size:12.5px;font-weight:700;color:var(--text);
-  box-shadow:0 10px 34px rgba(0,0,0,.5);z-index:900;
+  box-shadow:0 10px 34px rgba(0,0,0,.5);z-index:var(--z-toast);
   opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;max-width:calc(100vw - 32px);}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 

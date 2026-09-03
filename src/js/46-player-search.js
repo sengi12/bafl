@@ -40,7 +40,10 @@ async function openPlayerSearch() {
   document.body.appendChild(ov);
   pcLockPage(true);
   const inp = document.getElementById('psInput');
-  inp.addEventListener('input', () => psRender(inp.value));
+  // Debounced: a fast typist on a phone was running a full scan of the player dictionary per
+  // keystroke, and the render for a keystroke that's already been superseded is wasted work.
+  let deb = null;
+  inp.addEventListener('input', () => { clearTimeout(deb); deb = setTimeout(() => psRender(inp.value), 110); });
   inp.addEventListener('keydown', psKey);
   psRender('');
   setTimeout(() => inp.focus(), 30);

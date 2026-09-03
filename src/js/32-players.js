@@ -11,7 +11,7 @@
 //      second visit (and every roster open after a reload) is a local read instead of a 10MB
 //      download. Rosters change daily at most, so a 1-day TTL is not a meaningful staleness
 //      risk — and a stale hit still beats no data.
-const PLAYERS_CACHE = 'bafl-players-v1';
+const PLAYERS_CACHE = 'bafl-players-v2';   // v2: added the injury fields (see slimPlayers)
 const PLAYERS_TTL_MS = 24 * 60 * 60 * 1000;
 
 function slimPlayers(raw) {
@@ -35,6 +35,12 @@ function slimPlayers(raw) {
       college: p.college || null,
       number: p.number != null ? p.number : null,
       espn_id: p.espn_id != null ? String(p.espn_id) : null,
+      // Injury designation, for the banner across the top of the player card. Sleeper
+      // updates these through the week; with the 1-day TTL the banner is at most a day
+      // behind, which is the right trade against re-downloading 10MB for it.
+      injury_status: p.injury_status || null,
+      injury_body_part: p.injury_body_part || null,
+      injury_note: p.injury_note || null,
     };
   }
   return slim;
@@ -63,9 +69,21 @@ async function writePlayersCache(slim) {
   } catch { /* quota or private mode — the in-memory copy still works this session */ }
 }
 
+// Older slim dictionaries (keyed by earlier PLAYERS_CACHE names) lack fields the current build
+// reads; they'd never be hit again, so drop them rather than leave 2MB+ each in Cache Storage.
+function pruneOldPlayerCaches() {
+  try {
+    if (!('caches' in window)) return;
+    caches.keys().then(keys => keys
+      .filter(k => k.startsWith('bafl-players-') && k !== PLAYERS_CACHE)
+      .forEach(k => caches.delete(k))).catch(() => {});
+  } catch { /* no-op */ }
+}
+
 async function loadPlayers() {
   if (S.playersCache) return S.playersCache;
   if (S.playersPromise) return S.playersPromise;   // a load is already running — share it
+  pruneOldPlayerCaches();
   S.playersPromise = (async () => {
     const cached = await readPlayersCache();
     if (cached) { S.playersCache = cached; return cached; }

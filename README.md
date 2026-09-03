@@ -134,7 +134,33 @@ The page itself never scrolls sideways. Anything genuinely wider than the viewpo
 standings category grid, a player-card game log, the playoff bracket — lives in its own
 horizontal scroll container with its identity columns frozen, so it's reachable by scrolling
 *that* element rather than being clipped by the page's overflow guard. Swipe left/right moves
-between tabs; swipe down on a player card's hero dismisses it.
+between tabs.
+
+The overlays (player card, roster, player search) share one sizing contract, ported from
+TripleCrown, so they never run off screen at any window size:
+
+- **They size from the visible viewport, not `100vh`.** `--vvh` (set in
+  [src/css/00-base.css](src/css/00-base.css), kept current by
+  [src/js/07-viewport-guard.js](src/js/07-viewport-guard.js) from `visualViewport`) tracks the
+  collapsing mobile toolbar *and* the on-screen keyboard. Each overlay's padding is a set of
+  custom properties and its card's `max-height` is derived from `--vvh` minus that padding,
+  so the close button is always reachable. The padding honours the notch / home-indicator
+  insets (`viewport-fit=cover` is what makes those non-zero on iOS).
+- **The card is a flex column** — hero, tabs and season pills are fixed, the body is the one
+  region that scrolls — and it centres in a scrolling overlay with `margin:auto`, so a short
+  window shrinks the game log rather than pushing the header off the top.
+- **Nothing behind an overlay scrolls.** `html.pc-locked` freezes the page declaratively, and a
+  document-level touch/wheel guard cancels any gesture that doesn't land in a genuinely
+  scrollable region of the open overlay (the case CSS can't express). With nothing open, the
+  same guard kills iOS's rubber-band at the page and inner-scroller edges.
+- **Swipe down on the card's hero to dismiss it.** The card follows the finger 1:1 and, past
+  the threshold, slides off the bottom of the screen Sleeper-style. The hero is
+  `touch-action:none` so the browser can't claim the gesture first.
+- **Game-log column headers stay visible** while the body scrolls: each table's `<thead>` is
+  translated down to the body's top edge, clamped to its own table, one write per frame.
+- The player-card hero scales with `clamp()` (headshot, name, plate, meta) so one layout serves
+  a 360px phone and a desktop window; text inputs are 16px on touch devices so iOS doesn't zoom
+  the page on focus.
 
 ## Double headers
 

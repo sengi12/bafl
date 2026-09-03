@@ -13,7 +13,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- viewport-fit=cover: without it iOS resolves every env(safe-area-inset-*) to 0, which would
+     silently disable the notch / home-indicator padding on the header and every overlay. -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>BAFL — Bad Ass Football League</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏈</text></svg>">
 <meta name="theme-color" content="#0d1117">
@@ -31,10 +33,28 @@
   --qb:#ff4d6a;--rb:#00cf9f;--wr:#56a5ff;--te:#ffc94d;--k:#a855f7;
   --font:'Inter','SF Pro Display',system-ui,sans-serif;
   --mono:'JetBrains Mono','SF Mono','Fira Code',monospace;
+  /* Layering ladder. A toast must never be buried under the surface it's reporting on. */
+  --z-roster:500;--z-card:900;--z-search:950;--z-toast:2000;
+  /* The VISIBLE viewport height, which every overlay in the app sizes itself from.
+     100vh on iOS includes the strip behind the collapsing URL bar, so anything sized by it can
+     hang off the bottom of the screen with its close button out of reach. dvh fixes the
+     toolbar but not the on-screen keyboard. 07-viewport-guard.js overwrites this with the
+     measured visualViewport height (in px) at boot and on every resize, which tracks both;
+     the values here are only the pre-JS defaults. */
+  --vvh:100vh;
 }
+@supports (height:100dvh){:root{--vvh:100dvh;}}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{max-width:100%;overflow-x:hidden;}
 body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;font-size:14px;}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;}
+}
+/* iOS zooms the whole page when a focused text control's computed font-size is under 16px —
+   and never zooms back out, leaving the layout cropped. Only touch devices pay this. */
+@media (pointer:coarse){
+  .ps-input{font-size:16px;}
+}
 
 /* ── Horizontal scroll container ─────────────────────────────────────────────
    The page is overflow-x:hidden so a single too-wide child can't make the whole document pan
@@ -54,14 +74,20 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
    enough on iOS: the backdrop still runs pull-to-refresh and rubber-band scroll behind the
    overlay. Locking the root element and pairing it with overscroll-behavior on the overlay
    itself is what actually stops both. overflow:hidden does not reset scrollTop, so the page
-   is exactly where it was when the overlay closes. */
+   is exactly where it was when the overlay closes.
+
+   This is the declarative half. The other half is the document-level touchmove guard in
+   07-viewport-guard.js, which cancels any gesture that doesn't land in a genuinely scrollable
+   region of the open overlay — the case CSS can't express, and the one that used to let the
+   page creep behind a card on older iOS builds. */
 html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavior:none;}
 
 /* ── Toast ── */
-#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(14px);
+#toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom, 0px));
+  transform:translateX(-50%) translateY(14px);
   background:var(--surface2);border:1px solid var(--border);border-radius:9px;
   padding:9px 15px;font-size:12.5px;font-weight:700;color:var(--text);
-  box-shadow:0 10px 34px rgba(0,0,0,.5);z-index:900;
+  box-shadow:0 10px 34px rgba(0,0,0,.5);z-index:var(--z-toast);
   opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;max-width:calc(100vw - 32px);}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 
@@ -89,6 +115,9 @@ html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavi
 /* ── Header ── */
 .header{background:var(--surface);border-bottom:1px solid var(--border);
   padding:9px 18px;display:flex;align-items:center;gap:12px;
+  /* Installed to the home screen, the app draws under the iPhone status bar / notch — pad
+     the sticky header down past it. env() is 0 in a normal browser tab, so no change there. */
+  padding-top:calc(9px + env(safe-area-inset-top, 0px));
   position:sticky;top:0;z-index:200;flex-wrap:wrap;}
 .logo{font-size:17px;font-weight:900;color:var(--accent);letter-spacing:-.5px;
   display:inline-flex;align-items:center;gap:7px;white-space:nowrap;}
@@ -302,23 +331,34 @@ html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavi
 .team-link{cursor:pointer;border-bottom:1px dotted rgba(255,255,255,.2);transition:color .12s;}
 .team-link:hover{color:var(--accent);border-bottom-color:var(--accent);}
 
-/* ── Roster modal ── */
-.roster-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:500;
+/* ── Roster modal ────────────────────────────────────────────────────────────
+   Same sizing contract as the player card (see 72-player-card.css): the overlay scrolls and
+   pads with variables, the modal centres with margin:auto and derives its max-height from
+   --vvh minus that padding, and the body is the one region that scrolls. */
+.roster-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:var(--z-roster);
   display:none;align-items:flex-start;justify-content:center;
-  overflow-y:auto;padding:24px 14px;backdrop-filter:blur(3px);}
+  --rm-pad-x:14px;
+  --rm-pad-t:max(24px,env(safe-area-inset-top,0px));
+  --rm-pad-b:max(24px,env(safe-area-inset-bottom,0px));
+  padding:var(--rm-pad-t) var(--rm-pad-x) var(--rm-pad-b);
+  overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:none;
+  backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);}
 .roster-overlay.active{display:flex;}
 .roster-modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;
-  width:min(480px,100%);overflow:hidden;display:flex;flex-direction:column;
-  box-shadow:0 24px 70px rgba(0,0,0,.55);animation:modalIn .18s ease;}
+  width:min(480px,100%);margin:auto;overflow:hidden;display:flex;flex-direction:column;
+  box-shadow:0 24px 70px rgba(0,0,0,.55);animation:modalIn .18s ease;
+  max-height:calc(var(--vvh) - var(--rm-pad-t) - var(--rm-pad-b));}
 @keyframes modalIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
 .roster-modal-head{padding:14px 16px;border-bottom:1px solid var(--border);
   display:flex;align-items:center;gap:10px;background:var(--surface2);flex:none;}
-.roster-modal-title{font-size:16px;font-weight:900;flex:1;}
+.roster-modal-title{font-size:16px;font-weight:900;flex:1;min-width:0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .roster-modal-close{background:var(--surface3);border:1px solid var(--border);
-  color:var(--muted);border-radius:8px;width:30px;height:30px;font-size:15px;
+  color:var(--muted);border-radius:50%;width:34px;height:34px;font-size:15px;flex:none;
   cursor:pointer;display:flex;align-items:center;justify-content:center;}
 .roster-modal-close:hover{color:var(--text);border-color:var(--accent);}
-.roster-modal-body{overflow-y:auto;padding:8px 12px 16px;max-height:calc(100vh - 160px);}
+.roster-modal-body{flex:1;min-height:0;overflow-y:auto;padding:8px 12px 16px;
+  -webkit-overflow-scrolling:touch;overscroll-behavior:none;}
 .roster-sec-head{font-size:9.5px;font-weight:800;color:var(--muted);
   letter-spacing:1px;text-transform:uppercase;padding:10px 4px 5px;
   border-bottom:1px solid var(--border);margin-bottom:4px;}
@@ -361,86 +401,162 @@ html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavi
 .lcs-val{font-family:var(--mono);font-size:14px;font-weight:900;color:var(--text);line-height:1;}
 .lcs-total{border-color:rgba(61,155,255,.35);background:rgba(61,155,255,.08);}
 .lcs-total .lcs-val{color:var(--accent);}
-/* ═══ Player card ═══════════════════════════════════════════════════════════ */
-.pc-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:900;
+/* ═══ Player card ═══════════════════════════════════════════════════════════
+   Sizing contract (shared with TripleCrown). The OVERLAY is the scroll container and the CARD
+   centres inside it with margin:auto, so nothing about the card's placement depends on a
+   viewport height that a mobile browser may be lying about. Three things make "never off
+   screen" true at any window size:
+     • --vvh (00-base.css) is the VISIBLE viewport height — dvh where supported, and kept
+       current by 07-viewport-guard.js from visualViewport, the only measure that tracks both
+       the collapsing browser toolbar and the on-screen keyboard;
+     • the overlay's padding is expressed as custom properties, so the card's max-height is
+       derived from the same numbers (and the padding itself honours the notch / home-indicator
+       insets) rather than being a guess like "94vh";
+     • the card is a flex COLUMN: hero, tabs and pills are flex:none, the body is the one
+       flex:1 region that scrolls. Whatever the height, the header stays put and the close
+       button stays reachable. */
+.pc-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:var(--z-card);
   display:flex;align-items:flex-start;justify-content:center;
-  overflow-y:auto;padding:20px 12px;backdrop-filter:blur(3px);
-  /* Stops the drag from chaining out to the page behind once the card hits its scroll end. */
-  overscroll-behavior:contain;}
-.pc{background:var(--surface);border:1px solid var(--border);border-radius:14px;
-  width:min(760px,100%);display:flex;flex-direction:column;overflow:hidden;
+  --pc-pad-x:12px;
+  --pc-pad-t:max(24px,env(safe-area-inset-top,0px));
+  --pc-pad-b:max(24px,env(safe-area-inset-bottom,0px));
+  padding:var(--pc-pad-t) var(--pc-pad-x) var(--pc-pad-b);
+  overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:none;
+  backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);}
+.pc{background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  width:100%;max-width:760px;margin:auto;display:flex;flex-direction:column;overflow:hidden;
   box-shadow:0 24px 70px rgba(0,0,0,.6);animation:pcIn .18s ease;
-  max-height:calc(100vh - 40px);}
+  max-height:calc(var(--vvh) - var(--pc-pad-t) - var(--pc-pad-b));}
 @keyframes pcIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
 
-/* ── Hero ── */
-.pc-hero{position:relative;flex:none;padding:16px 16px 13px;display:flex;gap:13px;align-items:center;
-  background:var(--surface2);overflow:hidden;
+/* ── Hero (Sleeper-style) ────────────────────────────────────────────────────
+   A column: injury banner across the top; a row of big bottom-anchored headshot beside the
+   stacked name / owner chip / meta; then a FOOT row — the team plate (a rounded, subtly
+   slanted pedestal exactly as wide as the headshot column) with the draft band beside it.
+   Everything scales with the viewport through clamp(), which is what lets one layout serve a
+   360px phone and a desktop window without a breakpoint. */
+.pc-hero{position:relative;flex:none;display:flex;flex-direction:column;align-items:stretch;
+  padding:0;gap:0;background:var(--surface2);overflow:hidden;
+  --plateW:clamp(132px,38vw,176px);
   /* The swipe-to-close drag starts here, so the browser must not claim the gesture first. */
   touch-action:none;}
-.pc-hero-logo{position:absolute;right:-12px;top:50%;transform:translateY(-50%);
-  width:130px;height:130px;background-size:contain;background-repeat:no-repeat;
-  background-position:center;opacity:.13;pointer-events:none;}
-.pc-hero-img{width:72px;height:72px;border-radius:12px;object-fit:cover;object-position:top center;
-  background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.14);flex:none;position:relative;z-index:1;}
-.pc-hero-img-err{width:72px;height:72px;border-radius:12px;font-size:26px;position:relative;z-index:1;}
-.pc-hero-main{flex:1;min-width:0;position:relative;z-index:1;}
-.pc-name{font-size:19px;font-weight:900;color:#fff;letter-spacing:-.3px;line-height:1.15;
-  display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;}
-.pc-jersey{font-family:var(--mono);font-size:12px;font-weight:800;color:rgba(255,255,255,.6);}
-.pc-sub{display:flex;align-items:center;gap:7px;margin-top:5px;flex-wrap:wrap;}
-.pc-team{font-size:11.5px;font-weight:700;color:rgba(255,255,255,.8);}
-.pc-meta{display:flex;gap:14px;margin-top:9px;flex-wrap:wrap;}
+.pc-hero-logo{position:absolute;left:56%;top:52%;transform:translate(-50%,-50%);
+  width:clamp(140px,42vw,190px);height:clamp(140px,42vw,190px);
+  background-size:contain;background-repeat:no-repeat;background-position:center;
+  opacity:.15;pointer-events:none;filter:saturate(1.2);}
+.pc-hero-row{display:flex;gap:10px;align-items:flex-end;padding:0 12px 0 0;position:relative;}
+.pc-hero-shot{width:var(--plateW);flex:none;display:flex;justify-content:center;align-items:flex-end;
+  z-index:2;margin-top:clamp(3px,1vw,6px);}
+.pc-hero-img{width:auto;height:clamp(112px,31vw,142px);max-width:100%;display:block;
+  object-fit:contain;object-position:bottom center;
+  filter:drop-shadow(0 6px 10px rgba(0,0,0,.35));}
+.pc-hero-img-err{width:clamp(80px,22vw,104px);height:clamp(80px,22vw,104px);border-radius:50%;
+  font-size:clamp(26px,7vw,34px);margin-bottom:clamp(10px,3vw,16px);
+  background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.18);color:rgba(255,255,255,.75);}
+.pc-hero-main{flex:1;min-width:0;position:relative;z-index:1;align-self:stretch;
+  display:flex;flex-direction:column;
+  padding:clamp(6px,1.6vw,10px) 0 clamp(4px,1.2vw,7px) 0;}
+.pc-name{display:flex;flex-direction:column;align-items:flex-start;gap:0;color:#fff;
+  padding-right:40px;                 /* keep the name clear of the ✕ */
+  text-shadow:0 1px 4px rgba(0,0,0,.5);}
+.pc-name-l1,.pc-name-l2{font-size:clamp(19px,5.4vw,24px);font-weight:900;line-height:1.04;
+  letter-spacing:-.3px;max-width:100%;overflow-wrap:anywhere;}
+.pc-sub{margin-top:5px;display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-height:20px;min-width:0;}
+.pc-meta{margin-top:auto;padding-top:6px;display:flex;gap:clamp(8px,2.4vw,14px);flex-wrap:nowrap;min-width:0;}
 .pc-meta-item{display:flex;flex-direction:column;gap:1px;min-width:0;}
-.pc-meta-label{font-size:7.5px;font-weight:800;letter-spacing:.9px;color:rgba(255,255,255,.5);
-  text-transform:uppercase;}
-.pc-meta-val{font-size:11.5px;font-weight:800;color:#fff;white-space:nowrap;
-  overflow:hidden;text-overflow:ellipsis;max-width:120px;}
-.pc-meta-empty{color:rgba(255,255,255,.4);font-weight:600;}
-.pc-close{position:absolute;top:9px;right:9px;z-index:3;
-  background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.18);color:#fff;
-  border-radius:8px;width:28px;height:28px;font-size:14px;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;}
-.pc-close:hover{background:rgba(0,0,0,.55);}
+.pc-meta-label{font-size:8px;font-weight:800;letter-spacing:.06em;color:rgba(255,255,255,.7);
+  text-transform:uppercase;white-space:nowrap;}
+.pc-meta-val{font-size:clamp(12px,3.4vw,15px);font-weight:800;color:#fff;white-space:nowrap;
+  text-shadow:0 1px 3px rgba(0,0,0,.4);}
+/* The college is the one value that runs long — it yields before anything else does. */
+.pc-meta-item:last-child .pc-meta-val{overflow:hidden;text-overflow:ellipsis;max-width:clamp(54px,16vw,110px);}
+.pc-meta-empty{opacity:.55;}
 
-/* ── Draft line ── */
-.pc-hero-draft{margin-top:8px;min-height:1px;}
-.pc-draft-line{display:inline-flex;align-items:center;gap:7px;font-size:10.5px;font-weight:700;
-  color:#fff;background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.14);
-  border-radius:6px;padding:3px 8px;flex-wrap:wrap;}
-.pc-draft-line .muted{color:rgba(255,255,255,.65);font-weight:600;}
-.pc-draft-lbl{font-size:7.5px;font-weight:900;letter-spacing:1px;color:rgba(255,255,255,.55);}
+/* ── BAFL owner chip (under the name) ── */
+.pc-own-chip{display:inline-flex;align-items:center;gap:6px;max-width:100%;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.22);color:#fff;
+  border-radius:100px;padding:2px 10px 2px 8px;font-size:11px;font-weight:800;line-height:1.5;
+  cursor:pointer;user-select:none;-webkit-user-select:none;transition:border-color .12s,background .12s;}
+.pc-own-chip::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--accent);flex:none;
+  box-shadow:0 0 5px var(--accent);}
+.pc-own-chip:hover{border-color:#fff;background:rgba(0,0,0,.45);}
+.pc-own-chip:focus-visible{outline:2px solid #fff;outline-offset:2px;}
+.pc-own-lbl{font-size:8px;font-weight:900;letter-spacing:1px;color:rgba(255,255,255,.6);}
+.pc-own-fa{cursor:default;color:rgba(255,255,255,.7);font-weight:700;}
+.pc-own-fa::before{background:rgba(255,255,255,.4);box-shadow:none;}
+.pc-own-fa:hover{border-color:rgba(255,255,255,.22);background:rgba(0,0,0,.3);}
+
+/* ── Injury banner ── */
+.pc-inj-banner{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
+  padding:6px 10px;font-size:11.5px;font-weight:900;letter-spacing:.14em;color:#fff;
+  text-shadow:0 1px 2px rgba(0,0,0,.3);position:relative;z-index:3;min-width:0;}
+.pc-inj-dot{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;flex:none;
+  border-radius:50%;background:rgba(255,255,255,.85);font-size:11px;font-weight:900;letter-spacing:0;}
+.pc-inj-note{font-weight:700;letter-spacing:0;opacity:.9;font-size:10.5px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+.pc-inj-q{background:linear-gradient(180deg,#d99a27,#c78a1e);} .pc-inj-q .pc-inj-dot{color:#b07708;}
+.pc-inj-d{background:linear-gradient(180deg,#d97b27,#c76a1e);} .pc-inj-d .pc-inj-dot{color:#b05808;}
+.pc-inj-o{background:linear-gradient(180deg,#cf3d33,#b52f27);} .pc-inj-o .pc-inj-dot{color:#a32620;}
+
+/* ── Foot: pedestal + draft band on one line at the hero's bottom ── */
+.pc-hero-foot{display:flex;align-items:center;gap:8px;position:relative;z-index:2;}
+.pc-team-plate{width:var(--plateW);flex:none;position:relative;box-sizing:border-box;
+  padding:clamp(6px,1.6vw,8px) 12px;text-align:center;}
+.pc-team-plate::before{content:'';position:absolute;inset:0 0 0 -12px;background:var(--surface);
+  border-radius:0 14px 0 0;transform:skewX(7deg);transform-origin:top left;z-index:-1;
+  box-shadow:6px -2px 16px rgba(0,0,0,.28);}
+.pc-plate-team{font-size:clamp(12.5px,3.6vw,15px);font-weight:900;letter-spacing:.02em;color:var(--text);
+  line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pc-plate-sub{font-size:clamp(9.5px,2.8vw,11px);font-weight:800;color:var(--muted);margin-top:1px;white-space:nowrap;}
+.pc-plate-pos{font-weight:900;}
+.pc-plate-pos.pos-QB-t{color:var(--qb);} .pc-plate-pos.pos-RB-t{color:var(--rb);}
+.pc-plate-pos.pos-WR-t{color:var(--wr);} .pc-plate-pos.pos-TE-t{color:var(--te);}
+.pc-plate-pos.pos-K-t{color:var(--k);}
+.pc-jersey{font-family:var(--mono);font-weight:800;}
+.pc-hero-draft{margin:0 10px 0 auto;min-width:0;display:flex;justify-content:flex-end;min-height:1px;}
+.pc-draft-line{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;
+  font-size:clamp(9px,2.6vw,10.5px);font-weight:700;color:#fff;
+  background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.14);border-radius:7px;padding:4px 8px;}
+.pc-draft-line .muted{color:rgba(255,255,255,.72);font-weight:600;}
+.pc-draft-lbl{font-size:8px;font-weight:900;letter-spacing:1px;color:rgba(255,255,255,.6);}
 .pc-draft-logo{width:14px;height:14px;object-fit:contain;vertical-align:middle;}
 .pc-draft-team{display:inline-flex;align-items:center;gap:4px;}
+/* Narrow phones: the DRAFT label pill yields so the year/round/pick line never clips. */
+@media (max-width:500px){ .pc-hero-foot .pc-draft-lbl{display:none;} }
 
-/* ── BAFL ownership band ── */
-.pc-owner{display:flex;align-items:center;gap:9px;padding:7px 16px;flex:none;
-  background:rgba(61,155,255,.08);border-bottom:1px solid var(--border);}
-.pc-owner-lbl{font-size:8px;font-weight:900;letter-spacing:1.1px;color:var(--accent);
-  text-transform:uppercase;flex:none;}
-.pc-owner-name{font-size:12.5px;font-weight:800;color:var(--text);min-width:0;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.pc-owner-fa{background:rgba(125,133,144,.08);}
-.pc-owner-fa .pc-owner-lbl{color:var(--muted);}
-.pc-owner-fa .pc-owner-name{color:var(--muted);font-weight:700;}
+/* ── Close: a round 34px target, clear of the banner when there is one ── */
+.pc-close{position:absolute;top:10px;right:10px;width:34px;height:34px;border-radius:50%;z-index:5;
+  background:var(--surface3);border:none;color:var(--text);font-size:17px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;line-height:1;
+  -webkit-tap-highlight-color:rgba(255,255,255,.2);}
+.pc-close:hover{background:var(--border);}
+.pc-close:active{background:var(--accent);color:#000;}
+.pc-inj-banner ~ .pc-close{top:40px;}
 
-/* ── Source tabs (NFL / College) ── */
-.pc-tabs{display:flex;gap:4px;padding:9px 14px 0;flex:none;}
-.pc-tab{background:var(--surface2);border:1px solid var(--border);color:var(--muted);
-  border-radius:7px 7px 0 0;padding:6px 13px;font-size:11px;font-weight:800;cursor:pointer;
-  font-family:var(--font);transition:all .13s;white-space:nowrap;}
-.pc-tab:hover{color:var(--text);}
-.pc-tab.active{background:var(--surface3);color:var(--accent);border-color:var(--accent);border-bottom-color:transparent;}
+/* ── Source tabs (NFL / College) ── pill grammar, one scrolling row ─────────
+   flex:none matters: a scroll container inside a flex column can be shrunk to zero height
+   when the body needs room, which is exactly what used to swallow this row. */
+.pc-tabs{display:flex;gap:7px;padding:9px 12px 0;flex:none;max-width:100%;
+  overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.pc-tabs::-webkit-scrollbar{display:none;}
+.pc-tab{display:inline-flex;align-items:center;gap:6px;padding:6px 13px;min-height:30px;
+  font-size:11px;font-weight:800;letter-spacing:.03em;cursor:pointer;font-family:var(--font);
+  border:1px solid var(--border);border-radius:9px;background:var(--surface2);color:var(--muted);
+  transition:background-color .15s,border-color .15s,color .15s;white-space:nowrap;flex:none;}
+.pc-tab:hover{color:var(--text);border-color:var(--accent);}
+.pc-tab.active{background:var(--accent);color:#08121f;border-color:var(--accent);}
 
 /* ── Season pills ────────────────────────────────────────────────────────────
    The seedless core of the card: one pill per candidate season, each an independent lazy load
    from Sleeper. A season proven to have no games is DISABLED rather than removed, so the row
    never reflows out from under a finger mid-tap. */
-.pc-seasons{display:flex;gap:5px;padding:9px 14px 0;flex:none;
+.pc-seasons{display:flex;gap:5px;padding:9px 12px 0;flex:none;max-width:100%;
   overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
 .pc-seasons::-webkit-scrollbar{display:none;}
-.pc-season-pill{background:var(--surface2);border:1px solid var(--border);color:var(--muted);
-  border-radius:999px;padding:4px 12px;font-size:11px;font-weight:800;font-family:var(--mono);
+.pc-seasons:empty{padding:0;}
+.pc-season-pill{display:inline-flex;align-items:center;background:var(--surface2);border:1px solid var(--border);
+  color:var(--muted);border-radius:999px;padding:4px 12px;font-size:11px;font-weight:800;font-family:var(--mono);
   cursor:pointer;transition:all .13s;flex:none;white-space:nowrap;}
 .pc-season-pill:hover:not(:disabled){border-color:var(--accent);color:var(--text);}
 .pc-season-pill.active{background:var(--accent);border-color:var(--accent);color:#08121f;}
@@ -449,9 +565,9 @@ html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavi
   animation:pcPillPulse 1s ease-in-out infinite;}
 @keyframes pcPillPulse{0%,100%{opacity:1}50%{opacity:.45}}
 
-/* ── Body ── */
-.pc-body{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:10px 14px 16px;
-  -webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
+/* ── Body: the one region that scrolls ── */
+.pc-body{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:10px 12px 16px;
+  -webkit-overflow-scrolling:touch;overscroll-behavior:none;}
 .pc-loading,.pc-empty{padding:34px 16px;text-align:center;color:var(--muted);font-size:12.5px;}
 .pc-retry-wrap{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;}
 .pc-retry-btn{height:25px;padding:0 11px;border-radius:999px;border:1px solid var(--border);
@@ -463,7 +579,8 @@ html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavi
 /* ── Season table ── */
 .pc-season{margin-bottom:14px;}
 .pc-season-title{font-size:13px;font-weight:800;color:var(--text);margin:4px 2px 7px;
-  display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+  display:flex;align-items:center;gap:7px;flex-wrap:wrap;row-gap:4px;}
+.pc-season-title>span{white-space:nowrap;}
 .pc-season-team{font-size:11px;font-weight:700;color:var(--muted);display:inline-flex;
   align-items:center;gap:4px;}
 .pc-season-logo{width:14px;height:14px;object-fit:contain;vertical-align:middle;margin-right:2px;}
@@ -479,7 +596,10 @@ html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavi
 .pc-cons-D{color:#e8b7b4;border-color:rgba(248,81,73,.25);background:rgba(248,81,73,.09);}
 .pc-cons-F{color:#ffa9a4;border-color:rgba(248,81,73,.4);background:rgba(248,81,73,.16);}
 
-.pc-table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;}
+/* overflow-y:clip (not visible): the sticky header below is translated down inside this
+   wrapper and must never paint past the table it belongs to. */
+.pc-table-scroll{position:relative;overflow-x:auto;overflow-y:clip;
+  -webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;}
 .pc-table{border-collapse:separate;border-spacing:0;font-size:11px;width:100%;}
 .pc-table th{font-size:8.5px;font-weight:800;color:var(--muted);letter-spacing:.03em;
   padding:2px 4px;text-align:center;white-space:nowrap;background:var(--surface);}
@@ -493,9 +613,19 @@ html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavi
   background:var(--surface);min-width:38px;width:38px;}
 .pc-table th:nth-child(2),.pc-table td:nth-child(2){position:sticky;left:38px;z-index:2;
   background:var(--surface);min-width:56px;box-shadow:1px 0 0 var(--border);}
-.pc-table thead th{z-index:4;}
-.pc-table thead th:nth-child(1),.pc-table thead th:nth-child(2){z-index:5;}
+/* ── Sticky column headers ───────────────────────────────────────────────────
+   .pc-body is the scroller and the tables live inside it, but a CSS position:sticky thead
+   can't escape its own scroll-clipping ancestor (.pc-table-scroll sits in between). So
+   44-player-card.js translates each thead down by however far its table has scrolled under
+   the body's top edge, clamped so it never leaves its own table. These rules just make sure
+   the moved header paints above the rows sliding under it, on both axes. */
+.pc-table thead{position:relative;z-index:7;will-change:transform;}
+.pc-table thead th{position:relative;top:auto;background:var(--surface);}
+.pc-table thead tr:nth-child(1) th{z-index:4;}
+.pc-table thead tr:nth-child(2) th{z-index:5;}
+.pc-table thead tr th:nth-child(1),.pc-table thead tr th:nth-child(2){z-index:6;}
 .pc-table thead tr:last-child th{box-shadow:0 1px 0 var(--border);}
+.pc-table thead tr:last-child th:nth-child(2){box-shadow:1px 0 0 var(--border),0 1px 0 var(--border);}
 
 .pc-cell{padding:6px 7px;text-align:center;border-radius:6px;font-weight:700;font-family:var(--mono);
   background:var(--surface3);white-space:nowrap;min-width:34px;}
@@ -521,13 +651,23 @@ html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavi
   font-weight:800;border-top:2px solid var(--border);}
 .pc-empty-sub{font-size:10.5px;color:var(--muted);opacity:.75;margin-top:6px;
   max-width:44ch;margin-left:auto;margin-right:auto;line-height:1.5;}
-/* ── Player search ── */
-.ps-overlay{position:fixed;inset:0;background:rgba(0,0,0,.66);z-index:950;
-  display:flex;align-items:flex-start;justify-content:center;padding:60px 14px 20px;
-  backdrop-filter:blur(3px);overscroll-behavior:contain;}
+/* ── Player search ───────────────────────────────────────────────────────────
+   Same sizing contract as the player card (72-player-card.css). This is the one overlay with
+   a text input, so --vvh tracking the on-screen keyboard matters most here: the results list
+   shrinks to the space above the keyboard instead of running under it. The modal stays
+   pinned to the top (no margin:auto) so iOS never has to scroll the viewport to reach the
+   focused input. */
+.ps-overlay{position:fixed;inset:0;background:rgba(0,0,0,.66);z-index:var(--z-search);
+  display:flex;align-items:flex-start;justify-content:center;
+  --ps-pad-x:14px;
+  --ps-pad-t:max(48px,env(safe-area-inset-top,0px));
+  --ps-pad-b:max(16px,env(safe-area-inset-bottom,0px));
+  padding:var(--ps-pad-t) var(--ps-pad-x) var(--ps-pad-b);
+  backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);overscroll-behavior:none;}
 .ps-modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;
   width:min(480px,100%);display:flex;flex-direction:column;overflow:hidden;
-  box-shadow:0 24px 70px rgba(0,0,0,.6);max-height:calc(100vh - 90px);}
+  box-shadow:0 24px 70px rgba(0,0,0,.6);
+  max-height:calc(var(--vvh) - var(--ps-pad-t) - var(--ps-pad-b));}
 .ps-head{display:flex;align-items:center;gap:8px;padding:10px 12px;flex:none;
   background:var(--surface2);border-bottom:1px solid var(--border);}
 .ps-ico{font-size:13px;flex:none;opacity:.7;}
@@ -544,7 +684,7 @@ html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavi
   border-radius:7px;width:28px;height:28px;font-size:13px;cursor:pointer;flex:none;
   display:flex;align-items:center;justify-content:center;}
 .ps-close:hover{color:var(--text);border-color:var(--accent);}
-.ps-results{overflow-y:auto;padding:6px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
+.ps-results{flex:1;min-height:0;overflow-y:auto;padding:6px;-webkit-overflow-scrolling:touch;overscroll-behavior:none;}
 .ps-empty{padding:34px 14px;text-align:center;color:var(--muted);font-size:12.5px;}
 .ps-row{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:9px;
   cursor:pointer;transition:background .1s;min-width:0;}
@@ -648,8 +788,8 @@ html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavi
 @media(max-width:760px){
   .matchups-grid{grid-template-columns:1fr;}
   .leaders-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
-  .header{padding:8px 10px;gap:7px;}
-  .page{padding:14px 12px 50px;}
+  .header{padding:8px 10px;gap:7px;padding-top:calc(8px + env(safe-area-inset-top, 0px));}
+  .page{padding:14px 12px calc(50px + env(safe-area-inset-bottom, 0px));}
   .week-label{min-width:64px;font-size:12px;}
   .tabs{padding:0 10px;}
   .tab{padding:10px 14px;}
@@ -675,21 +815,23 @@ html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavi
   .divider-lbl{display:none;}
   .s-cat{font-size:11px;}
 
-  /* Player card fills the screen as a sheet, which is also what makes swipe-to-close read as
-     the natural dismissal. */
-  .pc-overlay{padding:0;align-items:flex-end;}
-  .pc{max-height:94vh;border-radius:16px 16px 0 0;width:100%;}
-  .pc-hero{padding:14px 13px 12px;gap:11px;}
-  .pc-hero-img,.pc-hero-img-err{width:60px;height:60px;}
-  .pc-name{font-size:16.5px;}
-  .pc-meta{gap:11px;margin-top:8px;}
-  .pc-meta-val{font-size:11px;max-width:88px;}
+  /* Overlays keep their centred layout at every width and simply trade margin for content.
+     Only the padding variables change here; each card's max-height is derived from them
+     (see 72-player-card.css), so the card can never be taller than what's visible. */
+  .pc-overlay{--pc-pad-x:8px;
+    --pc-pad-t:max(12px,env(safe-area-inset-top,0px));
+    --pc-pad-b:max(12px,env(safe-area-inset-bottom,0px));}
+  .pc{border-radius:14px;}
   .pc-body{padding:9px 10px 18px;}
   .pc-tabs,.pc-seasons{padding-left:10px;padding-right:10px;}
+  .pc-tab,.pc-season-pill{min-height:34px;}          /* tap-target floor */
   .lineup-cat-summary{grid-template-columns:repeat(2,minmax(0,1fr));}
 
-  .ps-overlay{padding:0;align-items:flex-end;}
-  .ps-modal{width:100%;border-radius:14px 14px 0 0;max-height:88vh;}
+  .roster-overlay{--rm-pad-x:8px;
+    --rm-pad-t:max(12px,env(safe-area-inset-top,0px));
+    --rm-pad-b:max(12px,env(safe-area-inset-bottom,0px));}
+  .ps-overlay{--ps-pad-x:8px;--ps-pad-t:max(10px,env(safe-area-inset-top,0px));}
+  .ps-modal{width:100%;}
 }
 
 /* Two columns of player rows — headshot, name, owner, value — is too cramped to read below
@@ -698,7 +840,7 @@ html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavi
   .leaders-grid{grid-template-columns:1fr;}
 }
 @media(max-width:420px){
-  .page{padding:11px 9px 44px;}
+  .page{padding:11px 9px calc(44px + env(safe-area-inset-bottom, 0px));}
   .logo{font-size:15px;}
   .updated-tag{display:none;}          /* the ↻ countdown already says how fresh this is */
   .ar-toggle{padding:4px 7px;}
@@ -706,11 +848,14 @@ html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavi
   .lineup-cat-summary{grid-template-columns:repeat(2,minmax(0,1fr));}
 }
 
-/* Landscape phones are short, not narrow — give the sheets back their vertical room. */
+/* Landscape phones are short, not narrow — give the overlays back their vertical room. */
 @media(max-height:520px){
-  .pc{max-height:98vh;}
-  .ps-modal{max-height:96vh;}
-  .ps-overlay{padding-top:10px;}
+  .pc-overlay{--pc-pad-t:max(6px,env(safe-area-inset-top,0px));--pc-pad-b:max(6px,env(safe-area-inset-bottom,0px));}
+  .roster-overlay{--rm-pad-t:max(6px,env(safe-area-inset-top,0px));--rm-pad-b:max(6px,env(safe-area-inset-bottom,0px));}
+  .ps-overlay{--ps-pad-t:max(6px,env(safe-area-inset-top,0px));--ps-pad-b:max(6px,env(safe-area-inset-bottom,0px));}
+  /* The hero is the tallest fixed part of the card; shrink it so the game log keeps room. */
+  .pc-hero{--plateW:clamp(110px,26vh,150px);}
+  .pc-hero-img{height:clamp(84px,24vh,120px);}
 }
 </style>
 </head>
@@ -924,6 +1069,20 @@ function fmtNum(v, dp = 0) {
   return Number.isInteger(n) ? String(n) : n.toFixed(dp);
 }
 
+// ─── Bounded cache ────────────────────────────────────────────────────────
+// The per-player fetch caches (weekly stats, ESPN game logs) are plain objects that used to
+// grow for the life of the session — a long evening of tapping through cards on a phone held
+// every payload ever fetched. String-keyed objects iterate in insertion order, so dropping the
+// first key evicts the oldest entry; `max` bounds the object without any bookkeeping.
+function cachePut(cache, key, val, max) {
+  if (!(key in cache)) {
+    const ks = Object.keys(cache);
+    if (ks.length >= max) delete cache[ks[0]];
+  }
+  cache[key] = val;
+  return val;
+}
+
 // ─── Toast ────────────────────────────────────────────────────────────────
 // A transient status line, so background failures (a player DB that won't load, a season with
 // no data) can report themselves without wiping out whatever the user is looking at.
@@ -996,6 +1155,155 @@ function ordinal(n) {
   const suff = (s >= 11 && s <= 13) ? 'th' : (n % 10 === 1) ? 'st' : (n % 10 === 2) ? 'nd' : (n % 10 === 3) ? 'rd' : 'th';
   return n + suff;
 }
+// ─── Viewport tracking + scroll containment ───────────────────────────────
+// Ported from TripleCrown. Two jobs, both about phones, both app-wide so no overlay has to
+// carry its own copy of the logic.
+//
+// 1. --vvh: the VISIBLE viewport height, as a CSS variable. Every overlay sizes itself from
+//    it (72-player-card.css and friends). 100vh on iOS includes the strip behind the
+//    collapsing URL bar; dvh fixes that but not the on-screen keyboard; visualViewport is
+//    the one measure that tracks both, so it wins whenever the browser provides it.
+//
+// 2. A document-level scroll guard. While an overlay is up, a swipe or wheel must never move
+//    the page behind it. The CSS lock (html.pc-locked) handles most of it declaratively; this
+//    catches what CSS can't express — a gesture that starts on a non-scrolling part of the
+//    overlay (the hero, a tab row, the backdrop) and would otherwise chain out to the page —
+//    and, with nothing open, kills iOS's rubber-band at the page edges, which is what reads as
+//    "the whole app bouncing" after a fling.
+
+// ── 1. The visible viewport ──────────────────────────────────────────────
+(function trackVisibleViewport() {
+  const root = document.documentElement;
+  let raf = 0;
+  function apply() {
+    raf = 0;
+    const vv = window.visualViewport;
+    // A pinch-zoomed viewport is small because the user zoomed, not because the screen is —
+    // don't shrink the overlays to match; wait for the zoom to reset.
+    const zoomed = !!(vv && vv.scale && Math.abs(vv.scale - 1) > 0.02);
+    const h = (vv && !zoomed && vv.height) || window.innerHeight || 0;
+    if (h > 0) root.style.setProperty('--vvh', `${Math.round(h)}px`);
+  }
+  // Coalesced to one write per frame: iOS fires visualViewport resize continuously while the
+  // toolbar animates, and each write invalidates every overlay's layout.
+  function schedule() { if (!raf) raf = requestAnimationFrame(apply); }
+  apply();
+  window.addEventListener('resize', schedule, { passive: true });
+  window.addEventListener('orientationchange', schedule, { passive: true });
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', schedule, { passive: true });
+})();
+
+// ── 2. Scroll guard ──────────────────────────────────────────────────────
+// The floating surfaces. The roster overlay is always in the DOM (display:none until active),
+// so visibility is checked rather than presence.
+const FLOAT_SEL = '.pc-overlay,.roster-overlay,.ps-overlay';
+let _sgLastY = null, _sgLastX = null;
+let _sgFloaters = null;                  // visible floaters, resolved once per gesture
+let _sgInner = null, _sgInnerFor = null; // nearest scrollable ancestor of the touchstart target
+let _sgFloatOk = null;                   // floater-branch verdict, cached lazily per gesture
+
+function sgVisibleFloaters() {
+  const out = [];
+  try {
+    document.querySelectorAll(FLOAT_SEL).forEach(f => { if (f.offsetWidth || f.offsetHeight) out.push(f); });
+  } catch { /* no DOM — nothing to guard */ }
+  return out;
+}
+// Touch events dispatch to the touchstart element for the whole gesture, so everything the
+// guard needs about the target can be resolved ONCE here rather than per touchmove at 60-120Hz
+// (the ancestor walk below calls getComputedStyle, a forced style recalc mid-scroll).
+function sgTouchAnchor(e) {
+  const t = e.touches && e.touches[0];
+  _sgLastY = t ? t.clientY : null; _sgLastX = t ? t.clientX : null;
+  _sgFloaters = sgVisibleFloaters();
+  _sgInnerFor = e.target || null;
+  _sgInner = sgInnerScrollerEl(e.target);
+  _sgFloatOk = null;
+}
+// The nearest ancestor that actually scrolls, or null when the gesture belongs to the page.
+function sgInnerScrollerEl(el) {
+  let n = (el && el.nodeType === 1) ? el : (el && el.parentElement);
+  while (n && n !== document.body && n !== document.documentElement) {
+    if (n.scrollHeight > n.clientHeight + 1 || n.scrollWidth > n.clientWidth + 1) {
+      let st = null; try { st = getComputedStyle(n); } catch { /* detached */ }
+      if (st && (/(auto|scroll)/.test(st.overflowY) || /(auto|scroll)/.test(st.overflowX))) return n;
+    }
+    n = n.parentElement;
+  }
+  return null;
+}
+// Should this drag be cancelled? Only a pull PAST the scroller's edge on the gesture's dominant
+// axis — that pull is what starts iOS's rubber-band and the chain into the page. An in-range
+// scroll is never touched. Returns 'page' when the scroller can't handle the dominant axis.
+function sgEdgeCancel(sc, dx, dy) {
+  const vert = Math.abs(dy) >= Math.abs(dx);
+  if (vert) {
+    if (!(sc.scrollHeight > sc.clientHeight + 1)) return 'page';
+    const atTop = sc.scrollTop <= 0, atBot = sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 1;
+    return ((atTop && dy > 0) || (atBot && dy < 0));
+  }
+  if (!(sc.scrollWidth > sc.clientWidth + 1)) return 'page';
+  const atL = sc.scrollLeft <= 0, atR = sc.scrollLeft + sc.clientWidth >= sc.scrollWidth - 1;
+  return ((atL && dx > 0) || (atR && dx < 0));
+}
+function sgScrollGuard(e) {
+  // Touch gestures reuse the touchstart snapshot; wheel events (no gesture anchor) resolve fresh.
+  const floaters = (e.type === 'touchmove' && _sgFloaters) ? _sgFloaters : sgVisibleFloaters();
+  if (!floaters.length) {
+    // Nothing open. One job remains, touch only: cancel the rubber-band — a pull past an edge,
+    // whether the edge belongs to an inner scroller (a game log, the standings grid) or to the
+    // page itself. Never cancel an in-range scroll.
+    if (e.type !== 'touchmove' || _sgLastY == null) return;
+    const t0 = e.touches && e.touches[0]; if (!t0) return;
+    const dy = t0.clientY - _sgLastY, dx = t0.clientX - (_sgLastX != null ? _sgLastX : t0.clientX);
+    _sgLastY = t0.clientY; _sgLastX = t0.clientX;
+    if (!dy && !dx) return;
+    const inner = (e.target === _sgInnerFor) ? _sgInner : sgInnerScrollerEl(e.target);
+    if (inner) {
+      const verdict = sgEdgeCancel(inner, dx, dy);
+      if (verdict === true) { if (e.cancelable) e.preventDefault(); return; }
+      if (verdict === false) return;             // the scroller owns it, in range
+      // 'page': the scroller can't handle this axis — fall through to the page edges.
+    }
+    if (Math.abs(dy) < Math.abs(dx)) return;      // horizontal on the page: nothing to bounce
+    const sc = document.scrollingElement || document.documentElement;
+    const atTop = sc.scrollTop <= 0, atBottom = sc.scrollTop + window.innerHeight >= sc.scrollHeight - 1;
+    if ((atTop && dy > 0) || (atBottom && dy < 0)) { if (e.cancelable) e.preventDefault(); }
+    return;
+  }
+  const t = e.target;
+  let within = null;
+  floaters.forEach(f => { if (f.contains(t)) within = f; });
+  if (!within) { if (e.cancelable) e.preventDefault(); return; }   // the backdrop: never scrolls
+  // Inside the surface: fine as long as the gesture lands in something that can actually
+  // scroll on either axis (cards hold horizontally-scrolling tables). The verdict is constant
+  // for a touch gesture, so it's computed once and reused.
+  let ok;
+  if (e.type === 'touchmove' && t === _sgInnerFor && _sgFloatOk !== null) {
+    ok = _sgFloatOk;
+  } else {
+    ok = false;
+    let n = (t && t.nodeType === 1) ? t : (t && t.parentElement);
+    while (n) {
+      const canY = n.scrollHeight > n.clientHeight + 1, canX = n.scrollWidth > n.clientWidth + 1;
+      if (canY || canX) {
+        let st = null; try { st = getComputedStyle(n); } catch { /* detached */ }
+        if (st && ((canY && /(auto|scroll)/.test(st.overflowY)) || (canX && /(auto|scroll)/.test(st.overflowX)))) { ok = true; break; }
+      }
+      if (n === within) break;
+      n = n.parentElement;
+    }
+    if (e.type === 'touchmove' && t === _sgInnerFor) _sgFloatOk = ok;
+  }
+  if (ok) return;
+  if (e.cancelable) e.preventDefault();
+}
+try {
+  document.addEventListener('touchstart', sgTouchAnchor, { passive: true });
+  // NON-passive on purpose: a passive listener can't call preventDefault.
+  document.addEventListener('touchmove', sgScrollGuard, { passive: false });
+  document.addEventListener('wheel', sgScrollGuard, { passive: false });
+} catch { /* no DOM */ }
 // ─── Season chain ────────────────────────────────────────────────────────
 // Walk previous_league_id to discover all past BAFL seasons.
 // Each fetch gets a hard 4-second timeout so a slow/hung API call
@@ -1373,7 +1681,7 @@ function findPerfectMatching(edges) {
 //      second visit (and every roster open after a reload) is a local read instead of a 10MB
 //      download. Rosters change daily at most, so a 1-day TTL is not a meaningful staleness
 //      risk — and a stale hit still beats no data.
-const PLAYERS_CACHE = 'bafl-players-v1';
+const PLAYERS_CACHE = 'bafl-players-v2';   // v2: added the injury fields (see slimPlayers)
 const PLAYERS_TTL_MS = 24 * 60 * 60 * 1000;
 
 function slimPlayers(raw) {
@@ -1397,6 +1705,12 @@ function slimPlayers(raw) {
       college: p.college || null,
       number: p.number != null ? p.number : null,
       espn_id: p.espn_id != null ? String(p.espn_id) : null,
+      // Injury designation, for the banner across the top of the player card. Sleeper
+      // updates these through the week; with the 1-day TTL the banner is at most a day
+      // behind, which is the right trade against re-downloading 10MB for it.
+      injury_status: p.injury_status || null,
+      injury_body_part: p.injury_body_part || null,
+      injury_note: p.injury_note || null,
     };
   }
   return slim;
@@ -1425,9 +1739,21 @@ async function writePlayersCache(slim) {
   } catch { /* quota or private mode — the in-memory copy still works this session */ }
 }
 
+// Older slim dictionaries (keyed by earlier PLAYERS_CACHE names) lack fields the current build
+// reads; they'd never be hit again, so drop them rather than leave 2MB+ each in Cache Storage.
+function pruneOldPlayerCaches() {
+  try {
+    if (!('caches' in window)) return;
+    caches.keys().then(keys => keys
+      .filter(k => k.startsWith('bafl-players-') && k !== PLAYERS_CACHE)
+      .forEach(k => caches.delete(k))).catch(() => {});
+  } catch { /* no-op */ }
+}
+
 async function loadPlayers() {
   if (S.playersCache) return S.playersCache;
   if (S.playersPromise) return S.playersPromise;   // a load is already running — share it
+  pruneOldPlayerCaches();
   S.playersPromise = (async () => {
     const cached = await readPlayersCache();
     if (cached) { S.playersCache = cached; return cached; }
@@ -1706,8 +2032,7 @@ async function fetchEspnGamelog(aid, league, season) {
   const key = `${league}:${aid}:${season || '_'}`;
   if (espnGamelogCache[key]) return espnGamelogCache[key];
   const data = await fetchJ(ESPN_GAMELOG_URL(league, aid, season));
-  espnGamelogCache[key] = data;
-  return data;
+  return cachePut(espnGamelogCache, key, data, 80);
 }
 
 // Normalize ESPN's core-athlete `draft` object. {undrafted:true} means the record loaded but
@@ -1928,6 +2253,10 @@ function espnSeasonTotals(rows, names) {
 //    group is the player's BAFL CATEGORY CONTRIBUTION for that game — passing yards net of the
 //    interception penalty, rush yards, receiving yards, total TDs, kicking points — graded
 //    green/yellow/red against per-position, per-game benchmarks. The raw box score follows.
+//
+// The card's LAYOUT and mobile behaviour (never off screen, nothing scrolls behind it, swipe
+// to dismiss, sticky game-log headers) are shared with TripleCrown — see the sizing contract
+// at the top of 72-player-card.css and the scroll guard in 07-viewport-guard.js.
 // ═══════════════════════════════════════════════════════════════════════════
 
 // Which BAFL categories a position actually contributes to, and what a good game looks like
@@ -2074,6 +2403,12 @@ function pcLockPage(on) {
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && PC) closePlayerCard(); });
 
 // ─── Shell ────────────────────────────────────────────────────────────────
+// Sleeper-style hero, shared with TripleCrown: an injury BANNER across the top; the name
+// stacked on two lines beside a big headshot anchored to the hero's bottom edge on the flat
+// team colour; the BAFL owner as a chip under the name; and a FOOT row — a slanted team plate
+// (nickname · pos · code · jersey) under the headshot with the draft band beside it. Every
+// dimension is a clamp() of the viewport width (72-player-card.css), which is what lets one
+// layout serve a 360px phone and a desktop window without a breakpoint.
 function renderPcShell(pid, p) {
   const name = p.name || 'Player';
   const pos = (p.pos || '').toUpperCase();
@@ -2082,44 +2417,72 @@ function renderPcShell(pid, p) {
   const exp = p.years_exp != null ? (p.years_exp === 0 ? 'R' : p.years_exp) : '–';
   const jersey = (p.number != null && p.number !== '') ? `#${p.number}` : '';
   // A few club primaries (PIT gold, NO gold) are light enough that white hero text vanishes
-  // on them — darken those rather than special-casing the text color.
+  // on them — darken those rather than special-casing the text color. Then every hero gets
+  // pulled a notch toward Sleeper's muted tone; full-saturation team paint reads neon.
   let tc = teamColor(tm);
   if (hexLum(tc) > 0.4) tc = darkenHex(tc, 0.45);
-  const heroStyle = tm ? `background:linear-gradient(135deg, ${tc} 0%, ${tc} 42%, var(--surface) 100%);` : '';
+  tc = darkenHex(tc, 0.16);
+  const heroStyle = tm ? `background:${tc};` : '';
 
   const meta = (label, val) =>
     `<div class="pc-meta-item"><span class="pc-meta-label">${label}</span>` +
     `<span class="pc-meta-val${(val == null || val === '–' || val === '') ? ' pc-meta-empty' : ''}">${esc(val == null || val === '' ? '–' : val)}</span></div>`;
 
+  const inj = pcInjuryInfo(p);
+  const injBanner = inj
+    ? `<div class="pc-inj-banner pc-inj-${inj.sev}" title="${escAttr(inj.detail || inj.word)}">` +
+      `<span class="pc-inj-dot">${inj.sev === 'q' ? '?' : '!'}</span>${esc(inj.word)}` +
+      `${inj.body ? `<span class="pc-inj-note">· ${esc(inj.body)}</span>` : ''}</div>`
+    : '';
+  const parts = String(name).trim().split(/\s+/);
+  const nameHtml = parts.length > 1
+    ? `<span class="pc-name-l1">${esc(parts[0])}</span><span class="pc-name-l2">${esc(parts.slice(1).join(' '))}</span>`
+    : `<span class="pc-name-l1">${esc(name)}</span>`;
+  const nick = tm ? String(teamDisplayName(tm) || tm).trim().split(/\s+/).slice(-1)[0].toUpperCase() : 'FREE AGENT';
+  const plateSub = [
+    pos ? `<span class="pc-plate-pos pos-${esc(pos)}-t">${esc(pos)}</span>` : '',
+    tm ? esc(tm) : '',
+    jersey ? `<span class="pc-jersey">${esc(jersey)}</span>` : '',
+  ].filter(Boolean).join(' · ');
+
   const html = `
-    <div class="pc" onclick="event.stopPropagation()">
+    <div class="pc" role="dialog" aria-modal="true" aria-label="${escAttr(name)}" onclick="event.stopPropagation()">
       <div class="pc-hero" style="${heroStyle}">
-        <div class="pc-hero-logo" style="${tm ? `background-image:url('${NFL_LOGO(tm)}')` : ''}"></div>
-        ${headshotImg(pid, p, 'pc-hero-img', (name[0] || '?'))}
-        <div class="pc-hero-main">
-          <div class="pc-name">${esc(name)}${jersey ? `<span class="pc-jersey">${esc(jersey)}</span>` : ''}</div>
-          <div class="pc-sub">
-            ${pos ? `<span class="pos-badge pos-${esc(pos)}">${esc(pos)}</span>` : ''}
-            ${tm ? `<span class="pc-team">${esc(teamDisplayName(tm))}</span>` : ''}
+        ${injBanner}
+        <div class="pc-hero-row">
+          <div class="pc-hero-shot">${pcHeroImg(pid, p, name[0] || '?')}</div>
+          <div class="pc-hero-logo" style="${tm ? `background-image:url('${NFL_LOGO(tm)}')` : ''}"></div>
+          <div class="pc-hero-main">
+            <div class="pc-name">${nameHtml}</div>
+            <div class="pc-sub">${pcOwnerChipHTML(pid)}</div>
+            <div class="pc-meta">
+              ${meta('AGE', age)}${meta('HT', fmtHeight(p.height))}
+              ${meta('WT', p.weight ? `${p.weight} lbs` : '–')}
+              ${meta('EXP', exp)}${meta('COLLEGE', p.college || '–')}
+            </div>
           </div>
-          <div class="pc-meta">
-            ${meta('AGE', age)}${meta('HT', fmtHeight(p.height))}
-            ${meta('WT', p.weight ? `${p.weight} lbs` : '–')}
-            ${meta('EXP', exp)}${meta('COLLEGE', p.college || '–')}
+        </div>
+        <div class="pc-hero-foot">
+          <div class="pc-team-plate">
+            <div class="pc-plate-team">${esc(nick)}</div>
+            <div class="pc-plate-sub">${plateSub}</div>
           </div>
           <div class="pc-hero-draft" id="pcHeroDraft"></div>
         </div>
         <button class="pc-close" onclick="closePlayerCard()" aria-label="Close">✕</button>
       </div>
-      ${pcOwnerBandHTML(pid)}
       <div class="pc-tabs" id="pcTabs"></div>
       <div class="pc-seasons" id="pcSeasons"></div>
       <div class="pc-body" id="pcBody"><div class="pc-loading">Loading game logs…</div></div>
     </div>`;
 
   let overlay = document.getElementById('pcOverlay');
-  if (overlay) { overlay.innerHTML = html; }
-  else {
+  if (overlay) {
+    // Re-used for a second player while open (search → card → search → card): undo anything a
+    // swipe-dismiss in flight may have left on the backdrop.
+    overlay.style.transition = ''; overlay.style.background = '';
+    overlay.innerHTML = html;
+  } else {
     overlay = document.createElement('div');
     overlay.id = 'pcOverlay';
     overlay.className = 'pc-overlay';
@@ -2131,15 +2494,57 @@ function renderPcShell(pid, p) {
   renderPcModeTabs();
 }
 
-// The BAFL-native band: who rosters this player right now, in the season being viewed.
-function pcOwnerBandHTML(pid) {
+// The hero photo. The card's other surfaces use the Sleeper THUMB (small, fast); the hero
+// shows the player at up to 142px tall, so it leads with the full-size cutout and falls back
+// through ESPN's NFL and college shots to the thumb. All are transparent cutouts, which is
+// what lets the photo sit straight on the team colour with no frame.
+function pcHeroImg(pid, p, initial) {
+  const urls = [];
+  const add = u => { const v = String(u || '').trim(); if (v && !urls.includes(v)) urls.push(v); };
+  add(SLEEPER_HEADSHOT(pid));
+  if (p && p.espn_id) { add(ESPN_HEADSHOT('nfl', p.espn_id)); add(ESPN_HEADSHOT('college-football', p.espn_id)); }
+  add(SLEEPER_HEADSHOT_THUMB(pid));
+  return `<img class="pc-hero-img" src="${urls[0]}" alt="" decoding="async"
+    data-fallbacks="${urls.slice(1).join('|')}" onerror="imgFallback(this)">` +
+    `<div class="hs-err pc-hero-img-err">${esc(initial)}</div>`;
+}
+
+// The BAFL-native piece of the hero: who rosters this player right now, in the season being
+// viewed, as a chip under the name. Tapping it opens that roster.
+function pcOwnerChipHTML(pid) {
   const own = ownerOf(pid);
   if (!own) {
-    return `<div class="pc-owner pc-owner-fa"><span class="pc-owner-lbl">BAFL</span>
-      <span class="pc-owner-name">Free agent</span></div>`;
+    return `<span class="pc-own-chip pc-own-fa" title="Not on any BAFL roster this season">` +
+      `<span class="pc-own-lbl">BAFL</span>Free agent</span>`;
   }
-  return `<div class="pc-owner"><span class="pc-owner-lbl">BAFL</span>
-    <span class="pc-owner-name team-link" onclick="closePlayerCard();openRosterModal(${own.rid})">${esc(own.name)}</span></div>`;
+  const rid = Number(own.rid);
+  const title = `Rostered by ${own.name} — open that roster`;
+  return `<span class="pc-own-chip" role="button" tabindex="0" title="${escAttr(title)}"
+    onclick="event.stopPropagation();pcJumpToOwner(${rid})"
+    onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();pcJumpToOwner(${rid});}">` +
+    `<span class="pc-own-lbl">BAFL</span>${esc(own.name)}</span>`;
+}
+function pcJumpToOwner(rid) { closePlayerCard(); openRosterModal(rid); }
+
+// Injury designation from the slim player record, shaped for the banner. Sleeper's status
+// strings vary in case and length ("Questionable", "IR", "Sus", "PUP", "COV", "NA"), so they
+// are reduced to a code first and worded from that.
+function pcInjuryInfo(p) {
+  const st = p && p.injury_status ? String(p.injury_status).trim() : '';
+  if (!st) return null;
+  const code = /^ir/i.test(st) ? 'IR' : /^out/i.test(st) ? 'OUT' : /^doubtful/i.test(st) ? 'D'
+    : /^questionable/i.test(st) ? 'Q' : /^sus/i.test(st) ? 'SUS' : /^pup/i.test(st) ? 'PUP'
+    : /^cov/i.test(st) ? 'COVID' : /^na$/i.test(st) ? 'NA' : /^dnr/i.test(st) ? 'DNR'
+    : st.slice(0, 3).toUpperCase();
+  const sev = code === 'Q' ? 'q' : code === 'D' ? 'd' : 'o';
+  const body = String(p.injury_body_part || '').trim();
+  const note = String(p.injury_note || '').trim();
+  // No structured "season-ending" flag exists on Sleeper, but the note nearly always says it.
+  const seasonOut = /season[-\s]?ending|out for (the )?(season|year)|miss (the )?(rest of the )?(season|year)|lost for the (season|year)/i
+    .test(`${body} ${note}`);
+  const word = { Q: 'QUESTIONABLE', D: 'DOUBTFUL', OUT: 'OUT', IR: seasonOut ? 'IR · OUT FOR SEASON' : 'IR',
+    SUS: 'SUSPENDED', PUP: 'PUP', COVID: 'COVID', NA: 'INACTIVE', DNR: 'DID NOT REPORT' }[code] || code;
+  return { code, sev, word, body, detail: [body, note].filter(Boolean).join(' — ') };
 }
 
 // The draft banner is independent of which season or source tab is showing, so it must NOT be
@@ -2243,6 +2648,7 @@ async function pcSelectSeason(season, opts) {
     body.innerHTML = renderPcSeason(PC.season, rows, PC.pos) +
       `<div class="pc-src">Per-game stats via Sleeper · category values use BAFL scoring.</div>`;
     applyConsistencyBadge(PC.season, rows, PC.pos);
+    pcEnableStickyStatHeaders();
   }
 }
 
@@ -2256,8 +2662,7 @@ async function fetchPlayerWeekly(pid, season) {
   const key = `${season}:${pid}`;
   if (S.weeklyCache[key]) return S.weeklyCache[key];
   const data = await fetchJ(SLEEPER_WEEKLY_URL(pid, season));
-  S.weeklyCache[key] = data || {};
-  return S.weeklyCache[key];
+  return cachePut(S.weeklyCache, key, data || {}, 120);
 }
 
 // ─── Row building ─────────────────────────────────────────────────────────
@@ -2561,59 +2966,126 @@ async function loadPcEspn(league) {
     for (const { season, gl } of perSeason) if (gl) out += renderEspnSeason(season, gl, league);
     if (!out) out = `<div class="pc-empty">No ${isCollege ? 'college ' : ''}game data found for this player.</div>`;
     else out += `<div class="pc-src">${isCollege ? 'College' : 'NFL'} per-game stats via ESPN · AVG shown as YPC.</div>`;
-    if (body) body.innerHTML = out;
+    if (body) { body.innerHTML = out; pcEnableStickyStatHeaders(); }
   } catch {
     if (body) body.innerHTML = pcRetryHTML(`Couldn't load ${isCollege ? 'college ' : ''}game logs.`);
   }
 }
 
+// ─── Sticky game-log headers ──────────────────────────────────────────────
+// .pc-body is the scroller; each season's table sits inside its own horizontal wrapper. A
+// CSS position:sticky thead can't reach past that wrapper to the body, so the header is
+// moved by hand: on every body scroll, each thead is translated down by exactly how far its
+// table has passed under the body's top edge, clamped so it never leaves its own table.
+// Reads are batched before writes (the old read→write→read alternation forced a layout pass
+// per table per tick) and the whole thing is coalesced to one frame — iOS fires scroll far
+// faster than it paints during momentum.
+let _pcStickyRaf = 0;
+let _pcStickyResizeBound = false;
+
+function pcRefreshStickyStatHeaders() {
+  _pcStickyRaf = 0;
+  const body = document.getElementById('pcBody');
+  if (!body || typeof body.getBoundingClientRect !== 'function') return;
+  const stickyTop = body.getBoundingClientRect().top;
+  const jobs = [];
+  body.querySelectorAll('.pc-table-scroll').forEach(wrap => {
+    const table = wrap.querySelector('.pc-table');
+    const thead = table && table.tHead;
+    if (!thead || !thead.rows || !thead.rows.length) return;
+    const wrapRect = wrap.getBoundingClientRect();
+    let headerHeight = 0;
+    for (let i = 0; i < thead.rows.length; i++) headerHeight += (thead.rows[i].getBoundingClientRect().height || 0);
+    const maxOffset = Math.max(0, (wrapRect.bottom - wrapRect.top) - headerHeight);
+    const offset = Math.max(0, Math.min(maxOffset, stickyTop - wrapRect.top));
+    jobs.push([thead, offset]);
+  });
+  jobs.forEach(([thead, offset]) => { thead.style.transform = offset > 0 ? `translateY(${offset}px)` : ''; });
+}
+function pcScheduleStickyStatHeaders() {
+  if (_pcStickyRaf) return;
+  _pcStickyRaf = (typeof requestAnimationFrame === 'function')
+    ? requestAnimationFrame(pcRefreshStickyStatHeaders)
+    : setTimeout(pcRefreshStickyStatHeaders, 16);
+}
+// Called after every body render. The overlay — and with it #pcBody — is rebuilt per card, so
+// the scroll listener binds PER ELEMENT; a module-wide "already bound" flag would attach it to
+// the first card only and every card after that would lose its headers.
+function pcEnableStickyStatHeaders() {
+  const body = document.getElementById('pcBody');
+  if (!body) return;
+  if (!body._pcStickyBound) {
+    body._pcStickyBound = true;
+    body.addEventListener('scroll', pcScheduleStickyStatHeaders, { passive: true });
+  }
+  if (!_pcStickyResizeBound) {
+    window.addEventListener('resize', pcScheduleStickyStatHeaders, { passive: true });
+    _pcStickyResizeBound = true;   // the window listener really is once per session
+  }
+  pcScheduleStickyStatHeaders();
+}
+
 // ─── Swipe-down to close ──────────────────────────────────────────────────
 // Standard mobile sheet behaviour. The drag must START ON THE HERO: that region doesn't
 // scroll, so a downward swipe there is unambiguous, whereas starting inside the body would
-// fight the game log's own scrolling. touchmove is deliberately NON-passive — a passive
-// listener can't preventDefault, which would leave the browser running pull-to-refresh and
-// background scroll underneath the drag.
+// fight the game log's own scrolling (a scrollTop check still misbehaves with momentum and
+// overscroll on iOS). The card follows the finger 1:1 — no resistance, no fading — and past
+// the threshold it keeps going and slides off the BOTTOM of the screen from wherever the
+// finger let go, Sleeper-style, while the backdrop fades. Pointer events aren't used: they'd
+// also capture mouse drags on desktop, where the ✕ is the right affordance.
 function attachPcSwipe(cardEl) {
   if (!cardEl || cardEl._swipeWired) return;
   cardEl._swipeWired = true;
-  const CLOSE_AT = 90;
+  const CLOSE_AT = 110;   // px dragged before it dismisses
   let y0 = null, dy = 0, dragging = false;
+  const reset = anim => {
+    cardEl.style.transition = anim ? 'transform .18s ease-out' : '';
+    cardEl.style.transform = '';
+    if (anim) setTimeout(() => { cardEl.style.transition = ''; }, 200);
+  };
 
   cardEl.addEventListener('touchstart', e => {
     if (e.touches.length !== 1) { dragging = false; y0 = null; return; }
     const t = e.target;
     const onHero = t && t.closest && t.closest('.pc-hero');
-    const onControl = t && t.closest && t.closest('.pc-close');
+    const onControl = t && t.closest && t.closest('.pc-close,.pc-own-chip');
     if (!onHero || onControl) { dragging = false; y0 = null; return; }
     y0 = e.touches[0].clientY; dy = 0; dragging = true;
     cardEl.style.transition = '';
   }, { passive: true });
 
+  // NON-passive on purpose. A passive listener cannot call preventDefault(), which would leave
+  // the browser running its own gesture underneath the drag — pull-to-refresh at the top of
+  // the page, and scrolling the content behind the card. Claiming the gesture stops both.
   cardEl.addEventListener('touchmove', e => {
     if (!dragging || y0 == null) return;
     dy = e.touches[0].clientY - y0;
-    if (dy <= 0) { cardEl.style.transform = ''; cardEl.style.opacity = ''; return; }
-    if (e.cancelable) e.preventDefault();   // we own this gesture now
-    // Resistance, so the card feels attached rather than free-falling.
-    const shift = dy < CLOSE_AT ? dy * 0.7 : CLOSE_AT * 0.7 + (dy - CLOSE_AT) * 0.35;
-    cardEl.style.transform = `translateY(${shift.toFixed(1)}px)`;
-    cardEl.style.opacity = String(Math.max(0.55, 1 - dy / 600));
+    if (dy <= 0) { cardEl.style.transform = ''; return; }
+    if (e.cancelable) e.preventDefault();
+    cardEl.style.transform = `translateY(${dy.toFixed(1)}px)`;
   }, { passive: false });
 
   const finish = () => {
     if (!dragging) return;
     dragging = false; y0 = null;
-    cardEl.style.opacity = '';
-    if (dy > CLOSE_AT) closePlayerCard();
-    else {
-      cardEl.style.transition = 'transform .18s ease-out';
-      cardEl.style.transform = '';
-      setTimeout(() => { cardEl.style.transition = ''; }, 200);
-    }
+    if (dy > CLOSE_AT) pcDismissFrom(cardEl, dy);
+    else reset(true);
     dy = 0;
   };
   cardEl.addEventListener('touchend', finish, { passive: true });
   cardEl.addEventListener('touchcancel', finish, { passive: true });
+}
+
+// The slide-off. Duration scales with the distance left to travel so a card released near the
+// bottom doesn't crawl; the overlay fades in step and the real close runs once both are done.
+function pcDismissFrom(cardEl, dy) {
+  const vh = window.innerHeight || 800;
+  const rest = Math.max(200, vh - dy);
+  cardEl.style.transition = `transform ${Math.min(0.32, rest / 1600).toFixed(2)}s ease-in`;
+  cardEl.style.transform = `translateY(${vh + 60}px)`;
+  const ov = document.getElementById('pcOverlay');
+  if (ov) { ov.style.transition = 'background .25s ease'; ov.style.background = 'rgba(0,0,0,0)'; }
+  setTimeout(closePlayerCard, 300);
 }
 // ─── Player search ────────────────────────────────────────────────────────
 // Type a name, get every matching NFL player with the one piece of information this league
@@ -2657,7 +3129,10 @@ async function openPlayerSearch() {
   document.body.appendChild(ov);
   pcLockPage(true);
   const inp = document.getElementById('psInput');
-  inp.addEventListener('input', () => psRender(inp.value));
+  // Debounced: a fast typist on a phone was running a full scan of the player dictionary per
+  // keystroke, and the render for a keystroke that's already been superseded is wasted work.
+  let deb = null;
+  inp.addEventListener('input', () => { clearTimeout(deb); deb = setTimeout(() => psRender(inp.value), 110); });
   inp.addEventListener('keydown', psKey);
   psRender('');
   setTimeout(() => inp.focus(), 30);

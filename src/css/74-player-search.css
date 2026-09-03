@@ -1,10 +1,20 @@
-/* ── Player search ── */
-.ps-overlay{position:fixed;inset:0;background:rgba(0,0,0,.66);z-index:950;
-  display:flex;align-items:flex-start;justify-content:center;padding:60px 14px 20px;
-  backdrop-filter:blur(3px);overscroll-behavior:contain;}
+/* ── Player search ───────────────────────────────────────────────────────────
+   Same sizing contract as the player card (72-player-card.css). This is the one overlay with
+   a text input, so --vvh tracking the on-screen keyboard matters most here: the results list
+   shrinks to the space above the keyboard instead of running under it. The modal stays
+   pinned to the top (no margin:auto) so iOS never has to scroll the viewport to reach the
+   focused input. */
+.ps-overlay{position:fixed;inset:0;background:rgba(0,0,0,.66);z-index:var(--z-search);
+  display:flex;align-items:flex-start;justify-content:center;
+  --ps-pad-x:14px;
+  --ps-pad-t:max(48px,env(safe-area-inset-top,0px));
+  --ps-pad-b:max(16px,env(safe-area-inset-bottom,0px));
+  padding:var(--ps-pad-t) var(--ps-pad-x) var(--ps-pad-b);
+  backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);overscroll-behavior:none;}
 .ps-modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;
   width:min(480px,100%);display:flex;flex-direction:column;overflow:hidden;
-  box-shadow:0 24px 70px rgba(0,0,0,.6);max-height:calc(100vh - 90px);}
+  box-shadow:0 24px 70px rgba(0,0,0,.6);
+  max-height:calc(var(--vvh) - var(--ps-pad-t) - var(--ps-pad-b));}
 .ps-head{display:flex;align-items:center;gap:8px;padding:10px 12px;flex:none;
   background:var(--surface2);border-bottom:1px solid var(--border);}
 .ps-ico{font-size:13px;flex:none;opacity:.7;}
@@ -21,7 +31,7 @@
   border-radius:7px;width:28px;height:28px;font-size:13px;cursor:pointer;flex:none;
   display:flex;align-items:center;justify-content:center;}
 .ps-close:hover{color:var(--text);border-color:var(--accent);}
-.ps-results{overflow-y:auto;padding:6px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
+.ps-results{flex:1;min-height:0;overflow-y:auto;padding:6px;-webkit-overflow-scrolling:touch;overscroll-behavior:none;}
 .ps-empty{padding:34px 14px;text-align:center;color:var(--muted);font-size:12.5px;}
 .ps-row{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:9px;
   cursor:pointer;transition:background .1s;min-width:0;}

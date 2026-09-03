@@ -1,83 +1,159 @@
-/* ═══ Player card ═══════════════════════════════════════════════════════════ */
-.pc-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:900;
+/* ═══ Player card ═══════════════════════════════════════════════════════════
+   Sizing contract (shared with TripleCrown). The OVERLAY is the scroll container and the CARD
+   centres inside it with margin:auto, so nothing about the card's placement depends on a
+   viewport height that a mobile browser may be lying about. Three things make "never off
+   screen" true at any window size:
+     • --vvh (00-base.css) is the VISIBLE viewport height — dvh where supported, and kept
+       current by 07-viewport-guard.js from visualViewport, the only measure that tracks both
+       the collapsing browser toolbar and the on-screen keyboard;
+     • the overlay's padding is expressed as custom properties, so the card's max-height is
+       derived from the same numbers (and the padding itself honours the notch / home-indicator
+       insets) rather than being a guess like "94vh";
+     • the card is a flex COLUMN: hero, tabs and pills are flex:none, the body is the one
+       flex:1 region that scrolls. Whatever the height, the header stays put and the close
+       button stays reachable. */
+.pc-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:var(--z-card);
   display:flex;align-items:flex-start;justify-content:center;
-  overflow-y:auto;padding:20px 12px;backdrop-filter:blur(3px);
-  /* Stops the drag from chaining out to the page behind once the card hits its scroll end. */
-  overscroll-behavior:contain;}
-.pc{background:var(--surface);border:1px solid var(--border);border-radius:14px;
-  width:min(760px,100%);display:flex;flex-direction:column;overflow:hidden;
+  --pc-pad-x:12px;
+  --pc-pad-t:max(24px,env(safe-area-inset-top,0px));
+  --pc-pad-b:max(24px,env(safe-area-inset-bottom,0px));
+  padding:var(--pc-pad-t) var(--pc-pad-x) var(--pc-pad-b);
+  overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:none;
+  backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);}
+.pc{background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  width:100%;max-width:760px;margin:auto;display:flex;flex-direction:column;overflow:hidden;
   box-shadow:0 24px 70px rgba(0,0,0,.6);animation:pcIn .18s ease;
-  max-height:calc(100vh - 40px);}
+  max-height:calc(var(--vvh) - var(--pc-pad-t) - var(--pc-pad-b));}
 @keyframes pcIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
 
-/* ── Hero ── */
-.pc-hero{position:relative;flex:none;padding:16px 16px 13px;display:flex;gap:13px;align-items:center;
-  background:var(--surface2);overflow:hidden;
+/* ── Hero (Sleeper-style) ────────────────────────────────────────────────────
+   A column: injury banner across the top; a row of big bottom-anchored headshot beside the
+   stacked name / owner chip / meta; then a FOOT row — the team plate (a rounded, subtly
+   slanted pedestal exactly as wide as the headshot column) with the draft band beside it.
+   Everything scales with the viewport through clamp(), which is what lets one layout serve a
+   360px phone and a desktop window without a breakpoint. */
+.pc-hero{position:relative;flex:none;display:flex;flex-direction:column;align-items:stretch;
+  padding:0;gap:0;background:var(--surface2);overflow:hidden;
+  --plateW:clamp(132px,38vw,176px);
   /* The swipe-to-close drag starts here, so the browser must not claim the gesture first. */
   touch-action:none;}
-.pc-hero-logo{position:absolute;right:-12px;top:50%;transform:translateY(-50%);
-  width:130px;height:130px;background-size:contain;background-repeat:no-repeat;
-  background-position:center;opacity:.13;pointer-events:none;}
-.pc-hero-img{width:72px;height:72px;border-radius:12px;object-fit:cover;object-position:top center;
-  background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.14);flex:none;position:relative;z-index:1;}
-.pc-hero-img-err{width:72px;height:72px;border-radius:12px;font-size:26px;position:relative;z-index:1;}
-.pc-hero-main{flex:1;min-width:0;position:relative;z-index:1;}
-.pc-name{font-size:19px;font-weight:900;color:#fff;letter-spacing:-.3px;line-height:1.15;
-  display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;}
-.pc-jersey{font-family:var(--mono);font-size:12px;font-weight:800;color:rgba(255,255,255,.6);}
-.pc-sub{display:flex;align-items:center;gap:7px;margin-top:5px;flex-wrap:wrap;}
-.pc-team{font-size:11.5px;font-weight:700;color:rgba(255,255,255,.8);}
-.pc-meta{display:flex;gap:14px;margin-top:9px;flex-wrap:wrap;}
+.pc-hero-logo{position:absolute;left:56%;top:52%;transform:translate(-50%,-50%);
+  width:clamp(140px,42vw,190px);height:clamp(140px,42vw,190px);
+  background-size:contain;background-repeat:no-repeat;background-position:center;
+  opacity:.15;pointer-events:none;filter:saturate(1.2);}
+.pc-hero-row{display:flex;gap:10px;align-items:flex-end;padding:0 12px 0 0;position:relative;}
+.pc-hero-shot{width:var(--plateW);flex:none;display:flex;justify-content:center;align-items:flex-end;
+  z-index:2;margin-top:clamp(3px,1vw,6px);}
+.pc-hero-img{width:auto;height:clamp(112px,31vw,142px);max-width:100%;display:block;
+  object-fit:contain;object-position:bottom center;
+  filter:drop-shadow(0 6px 10px rgba(0,0,0,.35));}
+.pc-hero-img-err{width:clamp(80px,22vw,104px);height:clamp(80px,22vw,104px);border-radius:50%;
+  font-size:clamp(26px,7vw,34px);margin-bottom:clamp(10px,3vw,16px);
+  background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.18);color:rgba(255,255,255,.75);}
+.pc-hero-main{flex:1;min-width:0;position:relative;z-index:1;align-self:stretch;
+  display:flex;flex-direction:column;
+  padding:clamp(6px,1.6vw,10px) 0 clamp(4px,1.2vw,7px) 0;}
+.pc-name{display:flex;flex-direction:column;align-items:flex-start;gap:0;color:#fff;
+  padding-right:40px;                 /* keep the name clear of the ✕ */
+  text-shadow:0 1px 4px rgba(0,0,0,.5);}
+.pc-name-l1,.pc-name-l2{font-size:clamp(19px,5.4vw,24px);font-weight:900;line-height:1.04;
+  letter-spacing:-.3px;max-width:100%;overflow-wrap:anywhere;}
+.pc-sub{margin-top:5px;display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-height:20px;min-width:0;}
+.pc-meta{margin-top:auto;padding-top:6px;display:flex;gap:clamp(8px,2.4vw,14px);flex-wrap:nowrap;min-width:0;}
 .pc-meta-item{display:flex;flex-direction:column;gap:1px;min-width:0;}
-.pc-meta-label{font-size:7.5px;font-weight:800;letter-spacing:.9px;color:rgba(255,255,255,.5);
-  text-transform:uppercase;}
-.pc-meta-val{font-size:11.5px;font-weight:800;color:#fff;white-space:nowrap;
-  overflow:hidden;text-overflow:ellipsis;max-width:120px;}
-.pc-meta-empty{color:rgba(255,255,255,.4);font-weight:600;}
-.pc-close{position:absolute;top:9px;right:9px;z-index:3;
-  background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.18);color:#fff;
-  border-radius:8px;width:28px;height:28px;font-size:14px;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;}
-.pc-close:hover{background:rgba(0,0,0,.55);}
+.pc-meta-label{font-size:8px;font-weight:800;letter-spacing:.06em;color:rgba(255,255,255,.7);
+  text-transform:uppercase;white-space:nowrap;}
+.pc-meta-val{font-size:clamp(12px,3.4vw,15px);font-weight:800;color:#fff;white-space:nowrap;
+  text-shadow:0 1px 3px rgba(0,0,0,.4);}
+/* The college is the one value that runs long — it yields before anything else does. */
+.pc-meta-item:last-child .pc-meta-val{overflow:hidden;text-overflow:ellipsis;max-width:clamp(54px,16vw,110px);}
+.pc-meta-empty{opacity:.55;}
 
-/* ── Draft line ── */
-.pc-hero-draft{margin-top:8px;min-height:1px;}
-.pc-draft-line{display:inline-flex;align-items:center;gap:7px;font-size:10.5px;font-weight:700;
-  color:#fff;background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.14);
-  border-radius:6px;padding:3px 8px;flex-wrap:wrap;}
-.pc-draft-line .muted{color:rgba(255,255,255,.65);font-weight:600;}
-.pc-draft-lbl{font-size:7.5px;font-weight:900;letter-spacing:1px;color:rgba(255,255,255,.55);}
+/* ── BAFL owner chip (under the name) ── */
+.pc-own-chip{display:inline-flex;align-items:center;gap:6px;max-width:100%;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.22);color:#fff;
+  border-radius:100px;padding:2px 10px 2px 8px;font-size:11px;font-weight:800;line-height:1.5;
+  cursor:pointer;user-select:none;-webkit-user-select:none;transition:border-color .12s,background .12s;}
+.pc-own-chip::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--accent);flex:none;
+  box-shadow:0 0 5px var(--accent);}
+.pc-own-chip:hover{border-color:#fff;background:rgba(0,0,0,.45);}
+.pc-own-chip:focus-visible{outline:2px solid #fff;outline-offset:2px;}
+.pc-own-lbl{font-size:8px;font-weight:900;letter-spacing:1px;color:rgba(255,255,255,.6);}
+.pc-own-fa{cursor:default;color:rgba(255,255,255,.7);font-weight:700;}
+.pc-own-fa::before{background:rgba(255,255,255,.4);box-shadow:none;}
+.pc-own-fa:hover{border-color:rgba(255,255,255,.22);background:rgba(0,0,0,.3);}
+
+/* ── Injury banner ── */
+.pc-inj-banner{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
+  padding:6px 10px;font-size:11.5px;font-weight:900;letter-spacing:.14em;color:#fff;
+  text-shadow:0 1px 2px rgba(0,0,0,.3);position:relative;z-index:3;min-width:0;}
+.pc-inj-dot{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;flex:none;
+  border-radius:50%;background:rgba(255,255,255,.85);font-size:11px;font-weight:900;letter-spacing:0;}
+.pc-inj-note{font-weight:700;letter-spacing:0;opacity:.9;font-size:10.5px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+.pc-inj-q{background:linear-gradient(180deg,#d99a27,#c78a1e);} .pc-inj-q .pc-inj-dot{color:#b07708;}
+.pc-inj-d{background:linear-gradient(180deg,#d97b27,#c76a1e);} .pc-inj-d .pc-inj-dot{color:#b05808;}
+.pc-inj-o{background:linear-gradient(180deg,#cf3d33,#b52f27);} .pc-inj-o .pc-inj-dot{color:#a32620;}
+
+/* ── Foot: pedestal + draft band on one line at the hero's bottom ── */
+.pc-hero-foot{display:flex;align-items:center;gap:8px;position:relative;z-index:2;}
+.pc-team-plate{width:var(--plateW);flex:none;position:relative;box-sizing:border-box;
+  padding:clamp(6px,1.6vw,8px) 12px;text-align:center;}
+.pc-team-plate::before{content:'';position:absolute;inset:0 0 0 -12px;background:var(--surface);
+  border-radius:0 14px 0 0;transform:skewX(7deg);transform-origin:top left;z-index:-1;
+  box-shadow:6px -2px 16px rgba(0,0,0,.28);}
+.pc-plate-team{font-size:clamp(12.5px,3.6vw,15px);font-weight:900;letter-spacing:.02em;color:var(--text);
+  line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pc-plate-sub{font-size:clamp(9.5px,2.8vw,11px);font-weight:800;color:var(--muted);margin-top:1px;white-space:nowrap;}
+.pc-plate-pos{font-weight:900;}
+.pc-plate-pos.pos-QB-t{color:var(--qb);} .pc-plate-pos.pos-RB-t{color:var(--rb);}
+.pc-plate-pos.pos-WR-t{color:var(--wr);} .pc-plate-pos.pos-TE-t{color:var(--te);}
+.pc-plate-pos.pos-K-t{color:var(--k);}
+.pc-jersey{font-family:var(--mono);font-weight:800;}
+.pc-hero-draft{margin:0 10px 0 auto;min-width:0;display:flex;justify-content:flex-end;min-height:1px;}
+.pc-draft-line{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;
+  font-size:clamp(9px,2.6vw,10.5px);font-weight:700;color:#fff;
+  background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.14);border-radius:7px;padding:4px 8px;}
+.pc-draft-line .muted{color:rgba(255,255,255,.72);font-weight:600;}
+.pc-draft-lbl{font-size:8px;font-weight:900;letter-spacing:1px;color:rgba(255,255,255,.6);}
 .pc-draft-logo{width:14px;height:14px;object-fit:contain;vertical-align:middle;}
 .pc-draft-team{display:inline-flex;align-items:center;gap:4px;}
+/* Narrow phones: the DRAFT label pill yields so the year/round/pick line never clips. */
+@media (max-width:500px){ .pc-hero-foot .pc-draft-lbl{display:none;} }
 
-/* ── BAFL ownership band ── */
-.pc-owner{display:flex;align-items:center;gap:9px;padding:7px 16px;flex:none;
-  background:rgba(61,155,255,.08);border-bottom:1px solid var(--border);}
-.pc-owner-lbl{font-size:8px;font-weight:900;letter-spacing:1.1px;color:var(--accent);
-  text-transform:uppercase;flex:none;}
-.pc-owner-name{font-size:12.5px;font-weight:800;color:var(--text);min-width:0;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.pc-owner-fa{background:rgba(125,133,144,.08);}
-.pc-owner-fa .pc-owner-lbl{color:var(--muted);}
-.pc-owner-fa .pc-owner-name{color:var(--muted);font-weight:700;}
+/* ── Close: a round 34px target, clear of the banner when there is one ── */
+.pc-close{position:absolute;top:10px;right:10px;width:34px;height:34px;border-radius:50%;z-index:5;
+  background:var(--surface3);border:none;color:var(--text);font-size:17px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;line-height:1;
+  -webkit-tap-highlight-color:rgba(255,255,255,.2);}
+.pc-close:hover{background:var(--border);}
+.pc-close:active{background:var(--accent);color:#000;}
+.pc-inj-banner ~ .pc-close{top:40px;}
 
-/* ── Source tabs (NFL / College) ── */
-.pc-tabs{display:flex;gap:4px;padding:9px 14px 0;flex:none;}
-.pc-tab{background:var(--surface2);border:1px solid var(--border);color:var(--muted);
-  border-radius:7px 7px 0 0;padding:6px 13px;font-size:11px;font-weight:800;cursor:pointer;
-  font-family:var(--font);transition:all .13s;white-space:nowrap;}
-.pc-tab:hover{color:var(--text);}
-.pc-tab.active{background:var(--surface3);color:var(--accent);border-color:var(--accent);border-bottom-color:transparent;}
+/* ── Source tabs (NFL / College) ── pill grammar, one scrolling row ─────────
+   flex:none matters: a scroll container inside a flex column can be shrunk to zero height
+   when the body needs room, which is exactly what used to swallow this row. */
+.pc-tabs{display:flex;gap:7px;padding:9px 12px 0;flex:none;max-width:100%;
+  overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.pc-tabs::-webkit-scrollbar{display:none;}
+.pc-tab{display:inline-flex;align-items:center;gap:6px;padding:6px 13px;min-height:30px;
+  font-size:11px;font-weight:800;letter-spacing:.03em;cursor:pointer;font-family:var(--font);
+  border:1px solid var(--border);border-radius:9px;background:var(--surface2);color:var(--muted);
+  transition:background-color .15s,border-color .15s,color .15s;white-space:nowrap;flex:none;}
+.pc-tab:hover{color:var(--text);border-color:var(--accent);}
+.pc-tab.active{background:var(--accent);color:#08121f;border-color:var(--accent);}
 
 /* ── Season pills ────────────────────────────────────────────────────────────
    The seedless core of the card: one pill per candidate season, each an independent lazy load
    from Sleeper. A season proven to have no games is DISABLED rather than removed, so the row
    never reflows out from under a finger mid-tap. */
-.pc-seasons{display:flex;gap:5px;padding:9px 14px 0;flex:none;
+.pc-seasons{display:flex;gap:5px;padding:9px 12px 0;flex:none;max-width:100%;
   overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
 .pc-seasons::-webkit-scrollbar{display:none;}
-.pc-season-pill{background:var(--surface2);border:1px solid var(--border);color:var(--muted);
-  border-radius:999px;padding:4px 12px;font-size:11px;font-weight:800;font-family:var(--mono);
+.pc-seasons:empty{padding:0;}
+.pc-season-pill{display:inline-flex;align-items:center;background:var(--surface2);border:1px solid var(--border);
+  color:var(--muted);border-radius:999px;padding:4px 12px;font-size:11px;font-weight:800;font-family:var(--mono);
   cursor:pointer;transition:all .13s;flex:none;white-space:nowrap;}
 .pc-season-pill:hover:not(:disabled){border-color:var(--accent);color:var(--text);}
 .pc-season-pill.active{background:var(--accent);border-color:var(--accent);color:#08121f;}
@@ -86,9 +162,9 @@
   animation:pcPillPulse 1s ease-in-out infinite;}
 @keyframes pcPillPulse{0%,100%{opacity:1}50%{opacity:.45}}
 
-/* ── Body ── */
-.pc-body{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:10px 14px 16px;
-  -webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
+/* ── Body: the one region that scrolls ── */
+.pc-body{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:10px 12px 16px;
+  -webkit-overflow-scrolling:touch;overscroll-behavior:none;}
 .pc-loading,.pc-empty{padding:34px 16px;text-align:center;color:var(--muted);font-size:12.5px;}
 .pc-retry-wrap{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;}
 .pc-retry-btn{height:25px;padding:0 11px;border-radius:999px;border:1px solid var(--border);
@@ -100,7 +176,8 @@
 /* ── Season table ── */
 .pc-season{margin-bottom:14px;}
 .pc-season-title{font-size:13px;font-weight:800;color:var(--text);margin:4px 2px 7px;
-  display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+  display:flex;align-items:center;gap:7px;flex-wrap:wrap;row-gap:4px;}
+.pc-season-title>span{white-space:nowrap;}
 .pc-season-team{font-size:11px;font-weight:700;color:var(--muted);display:inline-flex;
   align-items:center;gap:4px;}
 .pc-season-logo{width:14px;height:14px;object-fit:contain;vertical-align:middle;margin-right:2px;}
@@ -116,7 +193,10 @@
 .pc-cons-D{color:#e8b7b4;border-color:rgba(248,81,73,.25);background:rgba(248,81,73,.09);}
 .pc-cons-F{color:#ffa9a4;border-color:rgba(248,81,73,.4);background:rgba(248,81,73,.16);}
 
-.pc-table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;}
+/* overflow-y:clip (not visible): the sticky header below is translated down inside this
+   wrapper and must never paint past the table it belongs to. */
+.pc-table-scroll{position:relative;overflow-x:auto;overflow-y:clip;
+  -webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;}
 .pc-table{border-collapse:separate;border-spacing:0;font-size:11px;width:100%;}
 .pc-table th{font-size:8.5px;font-weight:800;color:var(--muted);letter-spacing:.03em;
   padding:2px 4px;text-align:center;white-space:nowrap;background:var(--surface);}
@@ -130,9 +210,19 @@
   background:var(--surface);min-width:38px;width:38px;}
 .pc-table th:nth-child(2),.pc-table td:nth-child(2){position:sticky;left:38px;z-index:2;
   background:var(--surface);min-width:56px;box-shadow:1px 0 0 var(--border);}
-.pc-table thead th{z-index:4;}
-.pc-table thead th:nth-child(1),.pc-table thead th:nth-child(2){z-index:5;}
+/* ── Sticky column headers ───────────────────────────────────────────────────
+   .pc-body is the scroller and the tables live inside it, but a CSS position:sticky thead
+   can't escape its own scroll-clipping ancestor (.pc-table-scroll sits in between). So
+   44-player-card.js translates each thead down by however far its table has scrolled under
+   the body's top edge, clamped so it never leaves its own table. These rules just make sure
+   the moved header paints above the rows sliding under it, on both axes. */
+.pc-table thead{position:relative;z-index:7;will-change:transform;}
+.pc-table thead th{position:relative;top:auto;background:var(--surface);}
+.pc-table thead tr:nth-child(1) th{z-index:4;}
+.pc-table thead tr:nth-child(2) th{z-index:5;}
+.pc-table thead tr th:nth-child(1),.pc-table thead tr th:nth-child(2){z-index:6;}
 .pc-table thead tr:last-child th{box-shadow:0 1px 0 var(--border);}
+.pc-table thead tr:last-child th:nth-child(2){box-shadow:1px 0 0 var(--border),0 1px 0 var(--border);}
 
 .pc-cell{padding:6px 7px;text-align:center;border-radius:6px;font-weight:700;font-family:var(--mono);
   background:var(--surface3);white-space:nowrap;min-width:34px;}

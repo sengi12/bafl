@@ -31,6 +31,20 @@ function fmtNum(v, dp = 0) {
   return Number.isInteger(n) ? String(n) : n.toFixed(dp);
 }
 
+// ─── Bounded cache ────────────────────────────────────────────────────────
+// The per-player fetch caches (weekly stats, ESPN game logs) are plain objects that used to
+// grow for the life of the session — a long evening of tapping through cards on a phone held
+// every payload ever fetched. String-keyed objects iterate in insertion order, so dropping the
+// first key evicts the oldest entry; `max` bounds the object without any bookkeeping.
+function cachePut(cache, key, val, max) {
+  if (!(key in cache)) {
+    const ks = Object.keys(cache);
+    if (ks.length >= max) delete cache[ks[0]];
+  }
+  cache[key] = val;
+  return val;
+}
+
 // ─── Toast ────────────────────────────────────────────────────────────────
 // A transient status line, so background failures (a player DB that won't load, a season with
 // no data) can report themselves without wiping out whatever the user is looking at.

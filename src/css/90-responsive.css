@@ -9,8 +9,8 @@
 @media(max-width:760px){
   .matchups-grid{grid-template-columns:1fr;}
   .leaders-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
-  .header{padding:8px 10px;gap:7px;}
-  .page{padding:14px 12px 50px;}
+  .header{padding:8px 10px;gap:7px;padding-top:calc(8px + env(safe-area-inset-top, 0px));}
+  .page{padding:14px 12px calc(50px + env(safe-area-inset-bottom, 0px));}
   .week-label{min-width:64px;font-size:12px;}
   .tabs{padding:0 10px;}
   .tab{padding:10px 14px;}
@@ -36,21 +36,23 @@
   .divider-lbl{display:none;}
   .s-cat{font-size:11px;}
 
-  /* Player card fills the screen as a sheet, which is also what makes swipe-to-close read as
-     the natural dismissal. */
-  .pc-overlay{padding:0;align-items:flex-end;}
-  .pc{max-height:94vh;border-radius:16px 16px 0 0;width:100%;}
-  .pc-hero{padding:14px 13px 12px;gap:11px;}
-  .pc-hero-img,.pc-hero-img-err{width:60px;height:60px;}
-  .pc-name{font-size:16.5px;}
-  .pc-meta{gap:11px;margin-top:8px;}
-  .pc-meta-val{font-size:11px;max-width:88px;}
+  /* Overlays keep their centred layout at every width and simply trade margin for content.
+     Only the padding variables change here; each card's max-height is derived from them
+     (see 72-player-card.css), so the card can never be taller than what's visible. */
+  .pc-overlay{--pc-pad-x:8px;
+    --pc-pad-t:max(12px,env(safe-area-inset-top,0px));
+    --pc-pad-b:max(12px,env(safe-area-inset-bottom,0px));}
+  .pc{border-radius:14px;}
   .pc-body{padding:9px 10px 18px;}
   .pc-tabs,.pc-seasons{padding-left:10px;padding-right:10px;}
+  .pc-tab,.pc-season-pill{min-height:34px;}          /* tap-target floor */
   .lineup-cat-summary{grid-template-columns:repeat(2,minmax(0,1fr));}
 
-  .ps-overlay{padding:0;align-items:flex-end;}
-  .ps-modal{width:100%;border-radius:14px 14px 0 0;max-height:88vh;}
+  .roster-overlay{--rm-pad-x:8px;
+    --rm-pad-t:max(12px,env(safe-area-inset-top,0px));
+    --rm-pad-b:max(12px,env(safe-area-inset-bottom,0px));}
+  .ps-overlay{--ps-pad-x:8px;--ps-pad-t:max(10px,env(safe-area-inset-top,0px));}
+  .ps-modal{width:100%;}
 }
 
 /* Two columns of player rows — headshot, name, owner, value — is too cramped to read below
@@ -59,7 +61,7 @@
   .leaders-grid{grid-template-columns:1fr;}
 }
 @media(max-width:420px){
-  .page{padding:11px 9px 44px;}
+  .page{padding:11px 9px calc(44px + env(safe-area-inset-bottom, 0px));}
   .logo{font-size:15px;}
   .updated-tag{display:none;}          /* the ↻ countdown already says how fresh this is */
   .ar-toggle{padding:4px 7px;}
@@ -67,9 +69,12 @@
   .lineup-cat-summary{grid-template-columns:repeat(2,minmax(0,1fr));}
 }
 
-/* Landscape phones are short, not narrow — give the sheets back their vertical room. */
+/* Landscape phones are short, not narrow — give the overlays back their vertical room. */
 @media(max-height:520px){
-  .pc{max-height:98vh;}
-  .ps-modal{max-height:96vh;}
-  .ps-overlay{padding-top:10px;}
+  .pc-overlay{--pc-pad-t:max(6px,env(safe-area-inset-top,0px));--pc-pad-b:max(6px,env(safe-area-inset-bottom,0px));}
+  .roster-overlay{--rm-pad-t:max(6px,env(safe-area-inset-top,0px));--rm-pad-b:max(6px,env(safe-area-inset-bottom,0px));}
+  .ps-overlay{--ps-pad-t:max(6px,env(safe-area-inset-top,0px));--ps-pad-b:max(6px,env(safe-area-inset-bottom,0px));}
+  /* The hero is the tallest fixed part of the card; shrink it so the game log keeps room. */
+  .pc-hero{--plateW:clamp(110px,26vh,150px);}
+  .pc-hero-img{height:clamp(84px,24vh,120px);}
 }

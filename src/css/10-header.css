@@ -1,6 +1,9 @@
 /* ── Header ── */
 .header{background:var(--surface);border-bottom:1px solid var(--border);
   padding:9px 18px;display:flex;align-items:center;gap:12px;
+  /* Installed to the home screen, the app draws under the iPhone status bar / notch — pad
+     the sticky header down past it. env() is 0 in a normal browser tab, so no change there. */
+  padding-top:calc(9px + env(safe-area-inset-top, 0px));
   position:sticky;top:0;z-index:200;flex-wrap:wrap;}
 .logo{font-size:17px;font-weight:900;color:var(--accent);letter-spacing:-.5px;
   display:inline-flex;align-items:center;gap:7px;white-space:nowrap;}
