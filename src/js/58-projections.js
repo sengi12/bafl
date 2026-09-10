@@ -1,27 +1,44 @@
 // ─── Live matchup projections ─────────────────────────────────────────────
 // In a category league the useful in-season question isn't "am I ahead", it's "which
 // categories are still winnable". Sleeper publishes a full-week projection for every player,
-// so we can run the EXACT SAME category math over projected stat lines as over real ones —
-// calcCatStats doesn't care whether the numbers it's handed already happened.
+// and the SAME category math runs over projected stat lines as over real ones —
+// baflPlayerCats doesn't care whether the numbers it's handed already happened.
 //
-// Deliberate honesty about what this is: these are FULL-WEEK projections for the starting
-// lineups, not "current score plus what's left". Sleeper's feed doesn't expose reliable
-// per-game clock state, and a projection that silently mixes finished and unplayed games
-// would be worse than one that's clearly labelled. The card shows actual and projected side
-// by side and lets you read the gap yourself.
+// A projection here is what has happened plus what is still to come, per starter:
+//
+//     projected = actual so far + (share of his game still unplayed) × full-game projection
+//
+// Before kickoff that is the plain Sleeper projection; at the final whistle it IS the box
+// score; in between it moves with the clock. The unplayed share comes from two feeds —
+// Sleeper's schedule (pre_game / in_game / complete, keyed by the same game_id the projection
+// rows carry) and ESPN's scoreboard (period and clock, so a game at halftime counts as half
+// played). Either can fail without breaking the view: with no scoreboard an in-progress game
+// counts as half played; with no game state at all every projection is taken in full, which
+// is exactly what the app showed before it knew about game clocks.
+//
+// The same pass records a variance for every projected total, which is what the win
+// probability in 59-winprob.js runs on: a team projected to 240 passing yards with three
+// starters still to play is a very different thing from 240 with all of them showered.
 
-// One week of projections for every player: pid → stats. ~1000 rows, one request, cached.
+// One week of projections for every player: pid → stats, plus the game and team each row
+// belongs to. ~3,300 rows, one request, cached for PROJ_TTL_MS.
 async function loadWeekProjections(season, week) {
   const key = `${season}:${week}`;
-  if (S.projCache[key]) return S.projCache[key];
+  const hit = S.projCache[key];
+  if (hit && Date.now() - hit.at < PROJ_TTL_MS) return hit;
   const rows = await fetchSoft(SLEEPER_WEEK_PROJ_URL(season, week), []);
-  const out = {};
+  const stats = {}, game = {}, team = {};
   for (const r of (rows || [])) {
     const pid = r.player_id || (r.player && r.player.player_id);
-    if (pid && r.stats) out[String(pid)] = r.stats;
+    if (!pid || !r.stats) continue;
+    stats[String(pid)] = r.stats;
+    if (r.game_id) game[String(pid)] = String(r.game_id);
+    if (r.team)    team[String(pid)] = String(r.team);
   }
-  S.projCache[key] = out;
-  return out;
+  // A failed refresh keeps the copy we have rather than blanking the card.
+  if (!Object.keys(stats).length && hit) return hit;
+  S.projCache[key] = { stats, game, team, at: Date.now() };
+  return S.projCache[key];
 }
 
 // Projections are only meaningful for a week that hasn't finished — for any past week the
@@ -30,21 +47,123 @@ function projectionsApply() {
   return isCurrentSeason() && S.selectedWeek === S.currentWeek && S.seasonStarted;
 }
 
-// Projected category totals in the same shape calcCatStats returns, so every downstream
-// consumer (matchup card, score line, swing detection) treats them identically.
-async function loadProjectedCats(matchups) {
+// Share of a game still to be played, from an ESPN scoreboard status block: 1 before kickoff,
+// 0 once final, and between those the clock. Four 15-minute periods; overtime is treated as
+// a short tail so a tied game in OT still reads as nearly — not entirely — decided.
+function gameRemainingFromEspn(st) {
+  const state = st && st.type && st.type.state;
+  if (state === 'post') return 0;
+  if (state !== 'in') return 1;
+  const period = Number(st.period || 1), clock = Number(st.clock || 0);
+  if (period >= 5) return Math.max(0.02, Math.min(0.15, clock / 3600));
+  return Math.max(0.02, Math.min(1, ((4 - period) * 900 + clock) / 3600));
+}
+
+// Game state for one week: game_id → share still unplayed, and the same by team code as a
+// fallback for a projection row that carries a team but no game_id. Sleeper's schedule is the
+// authority on "complete" (its stats are what the matchup is scored on); ESPN's clock refines
+// the games in between. Nothing here throws — a missing feed just means less precision.
+async function loadGameProgress(season, week) {
+  const [sched, board] = await Promise.all([
+    fetchSoft(SLEEPER_SCHEDULE_URL(season), null),
+    fetchSoft(ESPN_SCOREBOARD_URL(season, week), null),
+  ]);
+  // ESPN, keyed by home team in Sleeper's spelling.
+  const espn = {};
+  for (const ev of (board && Array.isArray(board.events) ? board.events : [])) {
+    const comp = ev.competitions && ev.competitions[0];
+    if (!comp) continue;
+    const side = ha => (comp.competitors || []).find(x => x.homeAway === ha);
+    const code = ha => { const s = side(ha); const a = s && s.team && s.team.abbreviation; return a ? (ESPN_TEAM_TO_SLEEPER[a] || a) : ''; };
+    const home = code('home'), away = code('away');
+    if (!home) continue;
+    espn[home] = { rem: gameRemainingFromEspn(comp.status || ev.status), away };
+  }
+  const rem = {};      // game_id → share
+  const byTeam = {};   // `team:CODE` → share
+  let games = 0, done = 0;
+  const seen = new Set();
+  for (const g of (Array.isArray(sched) ? sched : [])) {
+    if (Number(g.week) !== Number(week) || !g.game_id) continue;
+    const st = String(g.status || '').toLowerCase();
+    const e = espn[g.home];
+    const r = st === 'complete' ? 0 : e ? e.rem : st.startsWith('in') ? 0.5 : 1;
+    rem[String(g.game_id)] = r;
+    if (g.home) byTeam[g.home] = r;
+    if (g.away) byTeam[g.away] = r;
+    seen.add(g.home);
+    games++; if (r === 0) done++;
+  }
+  // Games the schedule feed didn't list (or the whole feed, if it failed) — ESPN alone.
+  for (const [home, e] of Object.entries(espn)) {
+    if (seen.has(home)) continue;
+    byTeam[home] = e.rem;
+    if (e.away) byTeam[e.away] = e.rem;
+    games++; if (e.rem === 0) done++;
+  }
+  return { rem, byTeam, weekDone: games > 0 && done === games };
+}
+
+// The unplayed share for one player, given his projection row's game_id and team. A game
+// neither feed knows about is taken as unplayed — unless every game we DO know about is over,
+// in which case the week is done and so is he.
+function gameRemaining(prog, gameId, team) {
+  if (!prog) return 1;
+  if (gameId != null && prog.rem[String(gameId)] != null) return prog.rem[String(gameId)];
+  if (team && prog.byTeam[team] != null) return prog.byTeam[team];
+  return prog.weekDone ? 0 : 1;
+}
+
+// How far a full-game projection typically misses, as a share of itself. Yardage misses scale
+// with volume — a 250-yard passer lands within ±80 or so two times in three, a 60-yard
+// receiver within ±35 — so those are coefficients of variation. Touchdowns are counting
+// events and behave like Poisson draws: variance equal to the mean. The unplayed share of a
+// game carries that share of the variance (the usual random-walk assumption), which is what
+// makes a lead safer as the clock runs.
+const PROJ_CV = { passing: 0.32, rushing: 0.55, receiving: 0.6, kicking: 0.5 };
+function projVariance(key, proj, rem) {
+  if (rem <= 0 || !proj) return 0;
+  const m = Math.abs(proj);
+  return key === 'tds' ? rem * m : rem * Math.pow(PROJ_CV[key] * m, 2);
+}
+
+// Blend live stats and projections into per-roster category totals in the same shape
+// calcCatStats returns — so the matchup card, score line and swing detection treat them
+// exactly like actuals — plus `var` (same shape, the unplayed variance) and `rem` (roster →
+// how many starter-games are still unplayed; 0 means that lineup is finished).
+function blendProjections(matchups, stats, proj, prog) {
+  const out = { var: {}, rem: {} };
+  for (const c of BAFL_CATS) { out[c.key] = {}; out.var[c.key] = {}; }
+  for (const m of matchups) {
+    const rid = m.roster_id;
+    out.rem[rid] = 0;
+    for (const c of BAFL_CATS) { out[c.key][rid] = 0; out.var[c.key][rid] = 0; }
+    for (const pid of (m.starters || [])) {
+      if (!pid || pid === '0') continue;                 // empty lineup slot
+      const act  = baflPlayerCats(stats[pid]);
+      const prow = proj.stats[pid];
+      const pc   = baflPlayerCats(prow);
+      const r    = prow ? gameRemaining(prog, proj.game[pid], proj.team[pid]) : 0;
+      out.rem[rid] += r;
+      for (const c of BAFL_CATS) {
+        out[c.key][rid]     += act[c.key] + r * pc[c.key];
+        out.var[c.key][rid] += projVariance(c.key, pc[c.key], r);
+      }
+    }
+  }
+  return out;
+}
+
+// Projected category totals for the week in view, or null when projections don't apply.
+async function loadProjectedCats(matchups, stats) {
   if (!projectionsApply()) return null;
-  const proj = await loadWeekProjections(S.league.season, S.selectedWeek);
-  if (!proj || !Object.keys(proj).length) return null;
-  // calcCatStats skips any starter missing from players_points ("did not participate").
-  // For a projection that check is wrong — nobody has participated yet — so hand it lineups
-  // whose players_points marks every starter as present.
-  const asIfPlayed = matchups.map(m => ({
-    roster_id: m.roster_id,
-    starters: m.starters || [],
-    players_points: Object.fromEntries((m.starters || []).map(pid => [pid, 0])),
-  }));
-  return calcCatStats(asIfPlayed, proj);
+  const season = S.league.season, week = S.selectedWeek;
+  const [proj, prog] = await Promise.all([
+    loadWeekProjections(season, week),
+    loadGameProgress(season, week),
+  ]);
+  if (!proj || !Object.keys(proj.stats).length) return null;
+  return blendProjections(matchups, stats || {}, proj, prog);
 }
 
 // Which categories are close enough to still flip. Early in a week EVERY category is close,

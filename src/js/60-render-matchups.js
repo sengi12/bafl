@@ -40,10 +40,11 @@ async function renderMatchups() {
     setPage(matchupsHTML(matchups, cs, null, dhPairs));
 
     // Projections arrive later and re-render in place. Guarded on league + week + tab, because
-    // by the time a 230KB response lands the user may well have moved on.
+    // by the time a 230KB response lands the user may well have moved on. They are handed the
+    // live stats too: a projection is what has happened plus what is still to come.
     if (projectionsApply()) {
       const league = lid(), week = S.selectedWeek;
-      loadProjectedCats(matchups).then(pcs => {
+      loadProjectedCats(matchups, stats).then(pcs => {
         if (!pcs) return;
         if (lid() !== league || S.selectedWeek !== week || S.activeTab !== 'matchups') return;
         setPage(matchupsHTML(matchups, cs, pcs, dhPairs));

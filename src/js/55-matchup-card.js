@@ -7,9 +7,19 @@
 // The names now live in their own flex header above the table. The table is left with the five
 // narrow data columns, which fit any phone; it still gets a scroll wrapper with a frozen
 // category column as a safety net for very long category labels at large text sizes.
+//
+// Under the names sits the win-probability bar (59-winprob.js). It renders in three states:
+// live (blended projections in hand), decided (both lineups finished, or a past week — the
+// result is the probability, 100/0), and not yet (current week, projections still loading).
 function matchupCard(rid1, rid2, cs, pcs) {
   const r = calcResult(cs, rid1, rid2);
   const name = rid => esc(S.rosterMap[rid] || `Team ${rid}`);
+  // Projections are only live while either side still has football to play. Once both
+  // lineups are done the actuals ARE the finish, and a projection line beside them is noise.
+  const live = !!(pcs && ((pcs.rem[rid1] || 0) > 0 || (pcs.rem[rid2] || 0) > 0));
+  const wp = live ? winProbability(pcs, rid1, rid2)
+           : (pcs || !projectionsApply()) ? decidedWinProb(r) : null;
+  if (!live) pcs = null;
   const s1s = r.tb1 ? `${r.s1}*` : String(r.s1);
   const s2s = r.tb2 ? `${r.s2}*` : String(r.s2);
   const cls1 = r.s1dec > r.s2dec ? 'win' : r.s1dec < r.s2dec ? 'loss' : 'tie';
@@ -64,6 +74,7 @@ function matchupCard(rid1, rid2, cs, pcs) {
         <span class="mc-score ${cls2}"${r.tb2 ? ` title="${escAttr(tbTip)}"` : ''}>${s2s}</span>
       </div>
     </div>
+    ${wp ? winBarHTML(wp, !live) : ''}
     ${pcs ? projScoreHTML(pcs, rid1, rid2) : ''}
     <div class="mc-table-scroll">
       <table class="mc-tbl">

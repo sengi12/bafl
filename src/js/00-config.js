@@ -5,6 +5,8 @@ const API                  = 'https://api.sleeper.app/v1';
 // api.sleeper.com (no /v1) is the newer host carrying per-player weekly stats and weekly
 // projections. Both are public, read-only and CORS-open, same as the /v1 endpoints.
 const API2                 = 'https://api.sleeper.com';
+// api.sleeper.app WITHOUT the /v1 prefix carries the NFL schedule (game status per game_id).
+const API0                 = 'https://api.sleeper.app';
 const AR_INTERVAL_MS       = 5 * 60 * 1000;  // auto-refresh every 5 min
 const REGULAR_SEASON_WEEKS = 14;              // weeks 1–14 are regular season
 const DH_WEEKS             = [2, 3, 13, 14];  // weeks that have a double header
@@ -25,6 +27,20 @@ const BAFL_POSITIONS = ['QB', 'RB', 'WR', 'TE', 'K'];
 const SLEEPER_WEEK_PROJ_URL  = (season, week) =>
   `${API2}/projections/nfl/${season}/${week}?season_type=regular`
   + BAFL_POSITIONS.map(p => `&position[]=${p}`).join('');
+
+// Game state, for blending what has happened into the projections (58-projections.js).
+// Sleeper's schedule says pre_game / in_game / complete per game_id — the same game_id the
+// projection rows carry, so no team-code mapping is needed to pair a player with his game.
+// ESPN's scoreboard adds the period and clock, so a game in progress counts as the share of
+// it actually played rather than a flat half.
+const SLEEPER_SCHEDULE_URL   = season => `${API0}/schedule/nfl/regular/${season}`;
+const ESPN_SCOREBOARD_URL    = (season, week) =>
+  `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=2&week=${week}&dates=${season}`;
+// ESPN spells one club differently from Sleeper.
+const ESPN_TEAM_TO_SLEEPER   = { WSH: 'WAS' };
+// Sleeper revises its projections through the week (injury news, weather), so a cached week
+// is re-fetched after this long rather than pinned for the session.
+const PROJ_TTL_MS            = 30 * 60 * 1000;
 
 // Sleeper's weekly stats thin out badly before this; don't offer season tabs we can't fill.
 const EARLIEST_STAT_SEASON = 2009;
@@ -51,7 +67,7 @@ const S = {
   ownerByPid: null,     // pid → roster_id, rebuilt per season (drives "who rosters him?")
   nflSeason: null,      // current NFL season year, from Sleeper's state endpoint
   weeklyCache: {},      // `${season}:${pid}` → raw weekly json (player card)
-  projCache: {},        // `${season}:${week}` → pid → projected stats
+  projCache: {},        // `${season}:${week}` → {stats: pid → projected stats, game: pid → game_id, team: pid → code, at}
   seasonStarted: false, // false when league is pre_draft / not yet scheduled
   arEnabled: true,
   arTimer: null,

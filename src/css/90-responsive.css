@@ -23,6 +23,8 @@
   .mc-val{padding:7px 8px;font-size:12px;min-width:50px;}
   .mc-cat{font-size:11px;padding:7px 5px;}
   .mc-chk{width:22px;min-width:22px;}
+  .mc-wp{padding:4px 10px 6px;gap:6px;}
+  .mc-wp-pct{min-width:30px;font-size:10px;}
   .proj-bar{padding:5px 10px;gap:6px;}
   .proj-swing{margin-left:0;width:100%;}
 

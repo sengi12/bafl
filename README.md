@@ -23,7 +23,17 @@ Ties on categories are broken by **total yards**. That scoring lives in exactly 
   double-header weeks (2, 3, 13, 14) computed from the season schedule.
 - **Live projections** — during the current week, each card shows the projected finish beside
   the live number, a projected category score, and which categories are still close enough to
-  flip. Live results always render first; projections patch in when they arrive.
+  flip. A projection is what has happened plus what is still to come: each starter's live line
+  plus the unplayed share of his full-game projection, so it starts as Sleeper's forecast on
+  Thursday and *is* the box score by Monday night. Game state comes from Sleeper's schedule
+  (per game) and ESPN's scoreboard (period and clock). Live results always render first;
+  projections patch in when they arrive.
+- **Win probability** — a bar under the team names, filled left-to-right by the first team's
+  chance of taking the matchup. Each category is a normal draw around its blended projection
+  whose spread shrinks as games finish; the five are combined exactly (with a level count falling
+  to the total-yards tiebreaker). A category already locked has no spread left, so three locked
+  wins read as 100% whatever the remaining games do — and by the end of the week the bar is
+  one colour end to end. The model lives in [src/js/59-winprob.js](src/js/59-winprob.js).
 - **Standings** — records including double headers, plus each team's season category totals
   heat-mapped by league rank. That grid is the quickest read on who is a passing juggernaut and
   who is one category away from a trade.
@@ -85,8 +95,9 @@ file to build or keep fresh.
 | Source | Used for |
 |---|---|
 | `api.sleeper.app/v1` | league, users, rosters, matchups, player database |
+| `api.sleeper.app/schedule` | game status per game (pre-game / in progress / complete) |
 | `api.sleeper.com` | per-player weekly stats, weekly projections |
-| `site.api.espn.com` | college + fallback NFL game logs |
+| `site.api.espn.com` | college + fallback NFL game logs; the week's scoreboard (period + clock) |
 | `sports.core.api.espn.com` | draft position |
 | `site.web.api.espn.com` | athlete-id lookup |
 
@@ -110,6 +121,7 @@ src/js/*.js               app JS, split by feature  (concatenated in filename or
 ```bash
 python3 build.py            # rebuild index.html from src/
 python3 build.py --check    # verify src/ still rebuilds index.html; exit 1 if not
+node tests/test_projections.js   # blended projections + win probability, run against the real partials
 ```
 
 The numeric filename prefixes fix concatenation order. This is concatenation, not module

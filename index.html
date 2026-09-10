@@ -191,6 +191,19 @@ html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavi
 .mc-vs{font-size:9px;font-weight:800;color:var(--muted);letter-spacing:1px;
   text-transform:uppercase;flex:none;padding:0 2px;}
 
+/* ── Win-probability bar ──
+   One track under the team names. Team 1's share fills from the left in blue; whatever is left
+   is team 2's, in coral. A decided matchup is a single colour end to end. */
+.mc-wp{display:flex;align-items:center;gap:8px;padding:5px 12px 7px;background:var(--surface2);
+  border-bottom:1px solid var(--border);--wp1:var(--accent);--wp2:#ff8a5b;}
+.mc-wp-pct{font-family:var(--mono);font-size:10.5px;font-weight:800;color:var(--muted);
+  flex:none;min-width:34px;line-height:1;}
+.mc-wp-pct-r{text-align:right;}
+.mc-wp-pct.lead{color:var(--text);}
+.mc-wp-track{flex:1;min-width:0;height:6px;border-radius:3px;background:var(--wp2);overflow:hidden;}
+.mc-wp-fill{height:100%;background:var(--wp1);transition:width .5s ease;}
+.mc-wp.decided .mc-wp-pct:not(.lead){opacity:.55;}
+
 .mc-table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;}
 .mc-tbl{width:100%;border-collapse:separate;border-spacing:0;}
 .mc-tbl tr{border-top:1px solid var(--border);}
@@ -802,6 +815,8 @@ html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavi
   .mc-val{padding:7px 8px;font-size:12px;min-width:50px;}
   .mc-cat{font-size:11px;padding:7px 5px;}
   .mc-chk{width:22px;min-width:22px;}
+  .mc-wp{padding:4px 10px 6px;gap:6px;}
+  .mc-wp-pct{min-width:30px;font-size:10px;}
   .proj-bar{padding:5px 10px;gap:6px;}
   .proj-swing{margin-left:0;width:100%;}
 
@@ -915,6 +930,8 @@ const API                  = 'https://api.sleeper.app/v1';
 // api.sleeper.com (no /v1) is the newer host carrying per-player weekly stats and weekly
 // projections. Both are public, read-only and CORS-open, same as the /v1 endpoints.
 const API2                 = 'https://api.sleeper.com';
+// api.sleeper.app WITHOUT the /v1 prefix carries the NFL schedule (game status per game_id).
+const API0                 = 'https://api.sleeper.app';
 const AR_INTERVAL_MS       = 5 * 60 * 1000;  // auto-refresh every 5 min
 const REGULAR_SEASON_WEEKS = 14;              // weeks 1–14 are regular season
 const DH_WEEKS             = [2, 3, 13, 14];  // weeks that have a double header
@@ -935,6 +952,20 @@ const BAFL_POSITIONS = ['QB', 'RB', 'WR', 'TE', 'K'];
 const SLEEPER_WEEK_PROJ_URL  = (season, week) =>
   `${API2}/projections/nfl/${season}/${week}?season_type=regular`
   + BAFL_POSITIONS.map(p => `&position[]=${p}`).join('');
+
+// Game state, for blending what has happened into the projections (58-projections.js).
+// Sleeper's schedule says pre_game / in_game / complete per game_id — the same game_id the
+// projection rows carry, so no team-code mapping is needed to pair a player with his game.
+// ESPN's scoreboard adds the period and clock, so a game in progress counts as the share of
+// it actually played rather than a flat half.
+const SLEEPER_SCHEDULE_URL   = season => `${API0}/schedule/nfl/regular/${season}`;
+const ESPN_SCOREBOARD_URL    = (season, week) =>
+  `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=2&week=${week}&dates=${season}`;
+// ESPN spells one club differently from Sleeper.
+const ESPN_TEAM_TO_SLEEPER   = { WSH: 'WAS' };
+// Sleeper revises its projections through the week (injury news, weather), so a cached week
+// is re-fetched after this long rather than pinned for the session.
+const PROJ_TTL_MS            = 30 * 60 * 1000;
 
 // Sleeper's weekly stats thin out badly before this; don't offer season tabs we can't fill.
 const EARLIEST_STAT_SEASON = 2009;
@@ -961,7 +992,7 @@ const S = {
   ownerByPid: null,     // pid → roster_id, rebuilt per season (drives "who rosters him?")
   nflSeason: null,      // current NFL season year, from Sleeper's state endpoint
   weeklyCache: {},      // `${season}:${pid}` → raw weekly json (player card)
-  projCache: {},        // `${season}:${week}` → pid → projected stats
+  projCache: {},        // `${season}:${week}` → {stats: pid → projected stats, game: pid → game_id, team: pid → code, at}
   seasonStarted: false, // false when league is pre_draft / not yet scheduled
   arEnabled: true,
   arTimer: null,
@@ -3419,9 +3450,19 @@ function calcResult(cs, rid1, rid2) {
 // The names now live in their own flex header above the table. The table is left with the five
 // narrow data columns, which fit any phone; it still gets a scroll wrapper with a frozen
 // category column as a safety net for very long category labels at large text sizes.
+//
+// Under the names sits the win-probability bar (59-winprob.js). It renders in three states:
+// live (blended projections in hand), decided (both lineups finished, or a past week — the
+// result is the probability, 100/0), and not yet (current week, projections still loading).
 function matchupCard(rid1, rid2, cs, pcs) {
   const r = calcResult(cs, rid1, rid2);
   const name = rid => esc(S.rosterMap[rid] || `Team ${rid}`);
+  // Projections are only live while either side still has football to play. Once both
+  // lineups are done the actuals ARE the finish, and a projection line beside them is noise.
+  const live = !!(pcs && ((pcs.rem[rid1] || 0) > 0 || (pcs.rem[rid2] || 0) > 0));
+  const wp = live ? winProbability(pcs, rid1, rid2)
+           : (pcs || !projectionsApply()) ? decidedWinProb(r) : null;
+  if (!live) pcs = null;
   const s1s = r.tb1 ? `${r.s1}*` : String(r.s1);
   const s2s = r.tb2 ? `${r.s2}*` : String(r.s2);
   const cls1 = r.s1dec > r.s2dec ? 'win' : r.s1dec < r.s2dec ? 'loss' : 'tie';
@@ -3476,6 +3517,7 @@ function matchupCard(rid1, rid2, cs, pcs) {
         <span class="mc-score ${cls2}"${r.tb2 ? ` title="${escAttr(tbTip)}"` : ''}>${s2s}</span>
       </div>
     </div>
+    ${wp ? winBarHTML(wp, !live) : ''}
     ${pcs ? projScoreHTML(pcs, rid1, rid2) : ''}
     <div class="mc-table-scroll">
       <table class="mc-tbl">
@@ -3496,27 +3538,44 @@ function matchupCard(rid1, rid2, cs, pcs) {
 // ─── Live matchup projections ─────────────────────────────────────────────
 // In a category league the useful in-season question isn't "am I ahead", it's "which
 // categories are still winnable". Sleeper publishes a full-week projection for every player,
-// so we can run the EXACT SAME category math over projected stat lines as over real ones —
-// calcCatStats doesn't care whether the numbers it's handed already happened.
+// and the SAME category math runs over projected stat lines as over real ones —
+// baflPlayerCats doesn't care whether the numbers it's handed already happened.
 //
-// Deliberate honesty about what this is: these are FULL-WEEK projections for the starting
-// lineups, not "current score plus what's left". Sleeper's feed doesn't expose reliable
-// per-game clock state, and a projection that silently mixes finished and unplayed games
-// would be worse than one that's clearly labelled. The card shows actual and projected side
-// by side and lets you read the gap yourself.
+// A projection here is what has happened plus what is still to come, per starter:
+//
+//     projected = actual so far + (share of his game still unplayed) × full-game projection
+//
+// Before kickoff that is the plain Sleeper projection; at the final whistle it IS the box
+// score; in between it moves with the clock. The unplayed share comes from two feeds —
+// Sleeper's schedule (pre_game / in_game / complete, keyed by the same game_id the projection
+// rows carry) and ESPN's scoreboard (period and clock, so a game at halftime counts as half
+// played). Either can fail without breaking the view: with no scoreboard an in-progress game
+// counts as half played; with no game state at all every projection is taken in full, which
+// is exactly what the app showed before it knew about game clocks.
+//
+// The same pass records a variance for every projected total, which is what the win
+// probability in 59-winprob.js runs on: a team projected to 240 passing yards with three
+// starters still to play is a very different thing from 240 with all of them showered.
 
-// One week of projections for every player: pid → stats. ~1000 rows, one request, cached.
+// One week of projections for every player: pid → stats, plus the game and team each row
+// belongs to. ~3,300 rows, one request, cached for PROJ_TTL_MS.
 async function loadWeekProjections(season, week) {
   const key = `${season}:${week}`;
-  if (S.projCache[key]) return S.projCache[key];
+  const hit = S.projCache[key];
+  if (hit && Date.now() - hit.at < PROJ_TTL_MS) return hit;
   const rows = await fetchSoft(SLEEPER_WEEK_PROJ_URL(season, week), []);
-  const out = {};
+  const stats = {}, game = {}, team = {};
   for (const r of (rows || [])) {
     const pid = r.player_id || (r.player && r.player.player_id);
-    if (pid && r.stats) out[String(pid)] = r.stats;
+    if (!pid || !r.stats) continue;
+    stats[String(pid)] = r.stats;
+    if (r.game_id) game[String(pid)] = String(r.game_id);
+    if (r.team)    team[String(pid)] = String(r.team);
   }
-  S.projCache[key] = out;
-  return out;
+  // A failed refresh keeps the copy we have rather than blanking the card.
+  if (!Object.keys(stats).length && hit) return hit;
+  S.projCache[key] = { stats, game, team, at: Date.now() };
+  return S.projCache[key];
 }
 
 // Projections are only meaningful for a week that hasn't finished — for any past week the
@@ -3525,21 +3584,123 @@ function projectionsApply() {
   return isCurrentSeason() && S.selectedWeek === S.currentWeek && S.seasonStarted;
 }
 
-// Projected category totals in the same shape calcCatStats returns, so every downstream
-// consumer (matchup card, score line, swing detection) treats them identically.
-async function loadProjectedCats(matchups) {
+// Share of a game still to be played, from an ESPN scoreboard status block: 1 before kickoff,
+// 0 once final, and between those the clock. Four 15-minute periods; overtime is treated as
+// a short tail so a tied game in OT still reads as nearly — not entirely — decided.
+function gameRemainingFromEspn(st) {
+  const state = st && st.type && st.type.state;
+  if (state === 'post') return 0;
+  if (state !== 'in') return 1;
+  const period = Number(st.period || 1), clock = Number(st.clock || 0);
+  if (period >= 5) return Math.max(0.02, Math.min(0.15, clock / 3600));
+  return Math.max(0.02, Math.min(1, ((4 - period) * 900 + clock) / 3600));
+}
+
+// Game state for one week: game_id → share still unplayed, and the same by team code as a
+// fallback for a projection row that carries a team but no game_id. Sleeper's schedule is the
+// authority on "complete" (its stats are what the matchup is scored on); ESPN's clock refines
+// the games in between. Nothing here throws — a missing feed just means less precision.
+async function loadGameProgress(season, week) {
+  const [sched, board] = await Promise.all([
+    fetchSoft(SLEEPER_SCHEDULE_URL(season), null),
+    fetchSoft(ESPN_SCOREBOARD_URL(season, week), null),
+  ]);
+  // ESPN, keyed by home team in Sleeper's spelling.
+  const espn = {};
+  for (const ev of (board && Array.isArray(board.events) ? board.events : [])) {
+    const comp = ev.competitions && ev.competitions[0];
+    if (!comp) continue;
+    const side = ha => (comp.competitors || []).find(x => x.homeAway === ha);
+    const code = ha => { const s = side(ha); const a = s && s.team && s.team.abbreviation; return a ? (ESPN_TEAM_TO_SLEEPER[a] || a) : ''; };
+    const home = code('home'), away = code('away');
+    if (!home) continue;
+    espn[home] = { rem: gameRemainingFromEspn(comp.status || ev.status), away };
+  }
+  const rem = {};      // game_id → share
+  const byTeam = {};   // `team:CODE` → share
+  let games = 0, done = 0;
+  const seen = new Set();
+  for (const g of (Array.isArray(sched) ? sched : [])) {
+    if (Number(g.week) !== Number(week) || !g.game_id) continue;
+    const st = String(g.status || '').toLowerCase();
+    const e = espn[g.home];
+    const r = st === 'complete' ? 0 : e ? e.rem : st.startsWith('in') ? 0.5 : 1;
+    rem[String(g.game_id)] = r;
+    if (g.home) byTeam[g.home] = r;
+    if (g.away) byTeam[g.away] = r;
+    seen.add(g.home);
+    games++; if (r === 0) done++;
+  }
+  // Games the schedule feed didn't list (or the whole feed, if it failed) — ESPN alone.
+  for (const [home, e] of Object.entries(espn)) {
+    if (seen.has(home)) continue;
+    byTeam[home] = e.rem;
+    if (e.away) byTeam[e.away] = e.rem;
+    games++; if (e.rem === 0) done++;
+  }
+  return { rem, byTeam, weekDone: games > 0 && done === games };
+}
+
+// The unplayed share for one player, given his projection row's game_id and team. A game
+// neither feed knows about is taken as unplayed — unless every game we DO know about is over,
+// in which case the week is done and so is he.
+function gameRemaining(prog, gameId, team) {
+  if (!prog) return 1;
+  if (gameId != null && prog.rem[String(gameId)] != null) return prog.rem[String(gameId)];
+  if (team && prog.byTeam[team] != null) return prog.byTeam[team];
+  return prog.weekDone ? 0 : 1;
+}
+
+// How far a full-game projection typically misses, as a share of itself. Yardage misses scale
+// with volume — a 250-yard passer lands within ±80 or so two times in three, a 60-yard
+// receiver within ±35 — so those are coefficients of variation. Touchdowns are counting
+// events and behave like Poisson draws: variance equal to the mean. The unplayed share of a
+// game carries that share of the variance (the usual random-walk assumption), which is what
+// makes a lead safer as the clock runs.
+const PROJ_CV = { passing: 0.32, rushing: 0.55, receiving: 0.6, kicking: 0.5 };
+function projVariance(key, proj, rem) {
+  if (rem <= 0 || !proj) return 0;
+  const m = Math.abs(proj);
+  return key === 'tds' ? rem * m : rem * Math.pow(PROJ_CV[key] * m, 2);
+}
+
+// Blend live stats and projections into per-roster category totals in the same shape
+// calcCatStats returns — so the matchup card, score line and swing detection treat them
+// exactly like actuals — plus `var` (same shape, the unplayed variance) and `rem` (roster →
+// how many starter-games are still unplayed; 0 means that lineup is finished).
+function blendProjections(matchups, stats, proj, prog) {
+  const out = { var: {}, rem: {} };
+  for (const c of BAFL_CATS) { out[c.key] = {}; out.var[c.key] = {}; }
+  for (const m of matchups) {
+    const rid = m.roster_id;
+    out.rem[rid] = 0;
+    for (const c of BAFL_CATS) { out[c.key][rid] = 0; out.var[c.key][rid] = 0; }
+    for (const pid of (m.starters || [])) {
+      if (!pid || pid === '0') continue;                 // empty lineup slot
+      const act  = baflPlayerCats(stats[pid]);
+      const prow = proj.stats[pid];
+      const pc   = baflPlayerCats(prow);
+      const r    = prow ? gameRemaining(prog, proj.game[pid], proj.team[pid]) : 0;
+      out.rem[rid] += r;
+      for (const c of BAFL_CATS) {
+        out[c.key][rid]     += act[c.key] + r * pc[c.key];
+        out.var[c.key][rid] += projVariance(c.key, pc[c.key], r);
+      }
+    }
+  }
+  return out;
+}
+
+// Projected category totals for the week in view, or null when projections don't apply.
+async function loadProjectedCats(matchups, stats) {
   if (!projectionsApply()) return null;
-  const proj = await loadWeekProjections(S.league.season, S.selectedWeek);
-  if (!proj || !Object.keys(proj).length) return null;
-  // calcCatStats skips any starter missing from players_points ("did not participate").
-  // For a projection that check is wrong — nobody has participated yet — so hand it lineups
-  // whose players_points marks every starter as present.
-  const asIfPlayed = matchups.map(m => ({
-    roster_id: m.roster_id,
-    starters: m.starters || [],
-    players_points: Object.fromEntries((m.starters || []).map(pid => [pid, 0])),
-  }));
-  return calcCatStats(asIfPlayed, proj);
+  const season = S.league.season, week = S.selectedWeek;
+  const [proj, prog] = await Promise.all([
+    loadWeekProjections(season, week),
+    loadGameProgress(season, week),
+  ]);
+  if (!proj || !Object.keys(proj.stats).length) return null;
+  return blendProjections(matchups, stats || {}, proj, prog);
 }
 
 // Which categories are close enough to still flip. Early in a week EVERY category is close,
@@ -3577,6 +3738,97 @@ function projScoreHTML(pcs, rid1, rid2) {
     <span class="proj-lbl">PROJECTED</span>
     <span class="proj-score">${r.s1}<span class="proj-dash">–</span>${r.s2}</span>
     ${swingTxt}
+  </div>`;
+}
+// ─── Win probability ──────────────────────────────────────────────────────
+// Each category's finish is modelled as normal: mean = the gap between the two teams' blended
+// projections, variance = the unplayed variance on both sides (58-projections.js). That gives
+// every category a win / lose / tie probability — tie being the mass within half a unit of
+// level, which matters for touchdowns and kicking (integers, and level TD counts are common)
+// and is negligible for yardage. A category whose starters have all finished has no variance
+// left, so its probabilities are 0 or 1: three such wins and the matchup is 100% whatever the
+// remaining games do, which is the property the bar promises.
+//
+// The five categories are then combined as independent draws — the exact distribution over
+// (won, lost) is a 21-state table, so there is no simulation and the number is reproducible —
+// and a level category count falls to the total-yards tiebreaker, itself a normal over the
+// three yardage categories.
+//
+// Independence across categories is the approximation: a quarterback's big day lifts passing
+// yards and touchdowns together, so real probabilities sit a little further from 50 than these.
+
+// Standard normal CDF — Abramowitz & Stegun 26.2.17, |error| < 7.5e-8, plenty for a percent.
+function normCdf(z) {
+  const t = 1 / (1 + 0.2316419 * Math.abs(z));
+  const d = 0.3989422804014327 * Math.exp(-z * z / 2);
+  const p = d * t * (0.319381530 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
+  return z >= 0 ? 1 - p : p;
+}
+
+// One category: P(team1 wins it), P(team2 wins it), P(level) for a gap ~ N(mu, variance).
+function catOutcome(mu, variance) {
+  if (!(variance > 0)) {
+    return mu > 0 ? { w1: 1, w2: 0, tie: 0 } : mu < 0 ? { w1: 0, w2: 1, tie: 0 } : { w1: 0, w2: 0, tie: 1 };
+  }
+  const sd = Math.sqrt(variance);
+  const w1 = 1 - normCdf((0.5 - mu) / sd);
+  const w2 = normCdf((-0.5 - mu) / sd);
+  return { w1, w2, tie: Math.max(0, 1 - w1 - w2) };
+}
+
+const YARD_CATS = ['passing', 'rushing', 'receiving'];
+
+// {p1, p2}: each team's chance of taking the matchup, from blended projections `pcs`.
+function winProbability(pcs, rid1, rid2) {
+  const v = pcs.var || {};
+  const gap  = k => (pcs[k][rid1] || 0) - (pcs[k][rid2] || 0);
+  const vsum = k => ((v[k] || {})[rid1] || 0) + ((v[k] || {})[rid2] || 0);
+  // dist: "won,lost" → probability, for team1.
+  let dist = new Map([['0,0', 1]]);
+  for (const c of BAFL_CATS) {
+    const o = catOutcome(gap(c.key), vsum(c.key));
+    const next = new Map();
+    const add = (k, p) => { if (p > 0) next.set(k, (next.get(k) || 0) + p); };
+    for (const [k, p] of dist) {
+      const [a, b] = k.split(',').map(Number);
+      add(`${a + 1},${b}`, p * o.w1);
+      add(`${a},${b + 1}`, p * o.w2);
+      add(`${a},${b}`,     p * o.tie);
+    }
+    dist = next;
+  }
+  const ty = catOutcome(
+    YARD_CATS.reduce((s, k) => s + gap(k), 0),
+    YARD_CATS.reduce((s, k) => s + vsum(k), 0));
+  let p1 = 0, p2 = 0;
+  for (const [k, p] of dist) {
+    const [a, b] = k.split(',').map(Number);
+    if (a > b) p1 += p;
+    else if (b > a) p2 += p;
+    else { p1 += p * (ty.w1 + ty.tie / 2); p2 += p * (ty.w2 + ty.tie / 2); }
+  }
+  return { p1, p2 };
+}
+
+// A finished matchup needs no model — the result is the probability. A dead heat (level
+// categories AND level yards) is the one case that stays at 50/50.
+function decidedWinProb(r) {
+  return r.s1dec > r.s2dec ? { p1: 1, p2: 0 } : r.s2dec > r.s1dec ? { p1: 0, p2: 1 } : { p1: .5, p2: .5 };
+}
+
+// The bar under the team names: one track, team1's share filled from the left, the rest is
+// team2's. At 100/0 it is a single colour end to end — the matchup is decided. A live 99.6%
+// rounds to 99, not 100: "100%" is reserved for a final.
+function winBarHTML(wp, decided) {
+  let a = Math.round(wp.p1 * 100);
+  if (!decided) a = Math.min(99, Math.max(1, a));
+  const b = 100 - a;
+  const tip = decided ? 'Final'
+    : 'Chance to win — live totals plus the unplayed share of every starter\'s projection';
+  return `<div class="mc-wp${decided ? ' decided' : ''}" title="${escAttr(tip)}" role="img" aria-label="${escAttr(`Win chance ${a}% to ${b}%`)}">
+    <span class="mc-wp-pct${a >= b ? ' lead' : ''}">${a}%</span>
+    <div class="mc-wp-track"><div class="mc-wp-fill" style="width:${a}%"></div></div>
+    <span class="mc-wp-pct mc-wp-pct-r${b >= a ? ' lead' : ''}">${b}%</span>
   </div>`;
 }
 // ─── Render: Matchups tab ─────────────────────────────────────────────────
@@ -3621,10 +3873,11 @@ async function renderMatchups() {
     setPage(matchupsHTML(matchups, cs, null, dhPairs));
 
     // Projections arrive later and re-render in place. Guarded on league + week + tab, because
-    // by the time a 230KB response lands the user may well have moved on.
+    // by the time a 230KB response lands the user may well have moved on. They are handed the
+    // live stats too: a projection is what has happened plus what is still to come.
     if (projectionsApply()) {
       const league = lid(), week = S.selectedWeek;
-      loadProjectedCats(matchups).then(pcs => {
+      loadProjectedCats(matchups, stats).then(pcs => {
         if (!pcs) return;
         if (lid() !== league || S.selectedWeek !== week || S.activeTab !== 'matchups') return;
         setPage(matchupsHTML(matchups, cs, pcs, dhPairs));
