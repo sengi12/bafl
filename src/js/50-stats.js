@@ -8,12 +8,13 @@
 //   Receiving: receiving yards
 //   Touchdowns: pass + rush + rec TDs
 //   Kicking:   XPM + 3×FGM + 2×(2PT conversions)
+// `short` is the label for a header that has no room for the word (phone-width standings).
 const BAFL_CATS = [
-  { key: 'passing',   label: 'Passing'    },
-  { key: 'receiving', label: 'Receiving'  },
-  { key: 'rushing',   label: 'Rushing'    },
-  { key: 'tds',       label: 'Touchdowns' },
-  { key: 'kicking',   label: 'Kicking'    },
+  { key: 'passing',   label: 'Passing',    short: 'PASS' },
+  { key: 'receiving', label: 'Receiving',  short: 'REC'  },
+  { key: 'rushing',   label: 'Rushing',    short: 'RUSH' },
+  { key: 'tds',       label: 'Touchdowns', short: 'TD'   },
+  { key: 'kicking',   label: 'Kicking',    short: 'KICK' },
 ];
 
 // One player's stat line → his BAFL category contribution. `ps` is a Sleeper stats object,

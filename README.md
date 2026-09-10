@@ -36,7 +36,8 @@ Ties on categories are broken by **total yards**. That scoring lives in exactly 
   one colour end to end. The model lives in [src/js/59-winprob.js](src/js/59-winprob.js).
 - **Standings** — records including double headers, plus each team's season category totals
   heat-mapped by league rank. That grid is the quickest read on who is a passing juggernaut and
-  who is one category away from a trade.
+  who is one category away from a trade. Click any column header to sort by it (again to flip);
+  the rank column always shows the team's standings position, whatever the order.
 - **Leaders** — league-wide category races, per **team** or per **player**. Player totals count
   only the weeks a BAFL team actually started them; bench production never won a category.
 - **Playoffs** — championship bracket and toilet bowl, seeded from the regular season.
@@ -122,6 +123,7 @@ src/js/*.js               app JS, split by feature  (concatenated in filename or
 python3 build.py            # rebuild index.html from src/
 python3 build.py --check    # verify src/ still rebuilds index.html; exit 1 if not
 node tests/test_projections.js   # blended projections + win probability, run against the real partials
+node tests/test_standings.js     # sortable standings: order, tie-breaks, header state
 ```
 
 The numeric filename prefixes fix concatenation order. This is concatenation, not module

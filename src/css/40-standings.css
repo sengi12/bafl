@@ -22,6 +22,16 @@
 .stbl .s-num{font-family:var(--mono);font-weight:700;text-align:right;color:var(--muted);white-space:nowrap;}
 .stbl .s-pf{color:var(--text);}
 .stbl th.r{text-align:right;}
+/* Sortable headers. The active column carries an arrow and its cells brighten a touch, so the
+   eye finds the column the order came from without reading the header row. */
+.stbl th.s-sort{cursor:pointer;user-select:none;transition:color .12s;}
+.stbl th.s-sort:hover,.stbl th.s-sort:focus-visible{color:var(--text);outline:none;}
+.stbl th.s-sort.active{color:var(--accent);}
+.s-arrow{font-size:7px;margin-left:4px;vertical-align:1px;}
+.stbl td.sorted{color:var(--text);}
+/* Category headers carry both the word and its short form; only one shows at a time.
+   The short form takes over below 760px (90-responsive.css). */
+.stbl th .lbl-short{display:none;}
 .stbl tr.playoff-divider td{border-top:2px solid var(--accent);}
 .divider-lbl{font-size:9px;font-weight:800;color:var(--accent);letter-spacing:.5px;
   background:rgba(61,155,255,.12);padding:1px 6px;border-radius:4px;margin-left:6px;
@@ -54,5 +64,6 @@
 .heat-legend{display:flex;align-items:center;gap:4px;margin-top:10px;
   font-size:9.5px;color:var(--muted);flex-wrap:wrap;}
 .heat-legend-lbl{margin-right:5px;font-weight:700;letter-spacing:.3px;}
+.heat-legend-hint{margin-left:auto;font-style:italic;}
 .heat-legend span:not(.heat-legend-lbl){display:inline-flex;align-items:center;justify-content:center;
   min-width:34px;height:16px;border-radius:4px;font-size:8.5px;font-weight:800;padding:0 5px;}

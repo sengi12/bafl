@@ -37,6 +37,9 @@
   .stbl .s-team{max-width:112px;}
   .divider-lbl{display:none;}
   .s-cat{font-size:11px;}
+  .stbl th .lbl-full{display:none;}
+  .stbl th .lbl-short{display:inline;}
+  .heat-legend-hint{margin-left:0;width:100%;}
 
   /* Overlays keep their centred layout at every width and simply trade margin for content.
      Only the padding variables change here; each card's max-height is derived from them
