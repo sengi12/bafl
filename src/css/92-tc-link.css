@@ -1,0 +1,19 @@
+/* ── TripleCrown link ────────────────────────────────────────────────────────
+   The crown in the bottom-right corner opens BAFL's sibling app. A fixed, round, thumb-sized
+   target with the logo inline as a data URI (6KB) — no extra request, works offline. It sits
+   above the page but below every overlay, and disappears entirely while one is open. */
+.tc-link{position:fixed;z-index:300;
+  right:calc(14px + env(safe-area-inset-right,0px));
+  bottom:calc(14px + env(safe-area-inset-bottom,0px));
+  width:48px;height:48px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(22,27,34,.92);border:1px solid var(--border);
+  box-shadow:0 6px 22px rgba(0,0,0,.5);
+  transition:transform .15s,border-color .15s,box-shadow .15s;
+  -webkit-tap-highlight-color:transparent;}
+.tc-link img{width:32px;height:auto;display:block;pointer-events:none;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.4));}
+.tc-link:hover{transform:translateY(-2px);border-color:#1599E6;box-shadow:0 8px 26px rgba(21,153,230,.35);}
+.tc-link:active{transform:translateY(0);}
+.tc-link:focus-visible{outline:2px solid #1599E6;outline-offset:2px;}
+html.pc-locked .tc-link{display:none;}

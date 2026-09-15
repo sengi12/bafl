@@ -8,6 +8,10 @@
 // narrow data columns, which fit any phone; it still gets a scroll wrapper with a frozen
 // category column as a safety net for very long category labels at large text sizes.
 //
+// Below the projected score, while the week is live, sits the path-to-win callout
+// (57-comeback.js) for whichever side is behind: the categories it has to take, by how much,
+// and who it has left to take them with — or the plain statement that it can't.
+//
 // Under the names sits the win-probability bar (59-winprob.js). It renders in three states:
 // live (blended projections in hand), decided (both lineups finished, or a past week — the
 // result is the probability, 100/0), and not yet (current week, projections still loading).
@@ -61,6 +65,14 @@ function matchupCard(rid1, rid2, cs, pcs) {
     pt2 = `<span class="mc-proj">→${Math.round(pr.ty2)}</span>`;
   }
 
+  // The side behind on the live result gets the path-to-win; a dead heat gets one each.
+  let need = '';
+  if (pcs) {
+    const level = r.s1dec === r.s2dec;
+    if (r.s1dec < r.s2dec || level) need += comebackHTML(comebackPlan(cs, pcs, rid1, rid2), S.rosterMap[rid1] || `Team ${rid1}`);
+    if (r.s2dec < r.s1dec || level) need += comebackHTML(comebackPlan(cs, pcs, rid2, rid1), S.rosterMap[rid2] || `Team ${rid2}`);
+  }
+
   return `
   <div class="mc">
     <div class="mc-head">
@@ -76,6 +88,7 @@ function matchupCard(rid1, rid2, cs, pcs) {
     </div>
     ${wp ? winBarHTML(wp, !live) : ''}
     ${pcs ? projScoreHTML(pcs, rid1, rid2) : ''}
+    ${need}
     <div class="mc-table-scroll">
       <table class="mc-tbl">
         <tbody>

@@ -133,6 +133,10 @@ html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavi
 .week-nav button:disabled{opacity:.35;cursor:not-allowed;pointer-events:none;}
 .week-label{font-size:13px;font-weight:800;color:var(--text);
   min-width:90px;text-align:center;white-space:nowrap;}
+/* "next": a week Sleeper has opened that the app hasn't turned over to yet. */
+.wk-tag{display:inline-block;font-size:8px;font-weight:900;letter-spacing:.8px;text-transform:uppercase;
+  color:var(--accent);background:rgba(61,155,255,.12);border:1px solid rgba(61,155,255,.3);
+  border-radius:4px;padding:1px 5px;margin-left:6px;vertical-align:middle;line-height:1.3;}
 .dh-dot{display:inline-block;width:7px;height:7px;border-radius:50%;
   background:var(--warn);margin-left:5px;vertical-align:middle;
   box-shadow:0 0 5px var(--warn);}
@@ -153,7 +157,8 @@ html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavi
 .tab.active{color:var(--accent);border-bottom-color:var(--accent);}
 
 /* ── Content ── */
-.page{max-width:1240px;margin:0 auto;padding:22px 18px 60px;}
+/* Bottom padding clears the TripleCrown crown pinned in the corner (92-tc-link.css). */
+.page{max-width:1240px;margin:0 auto;padding:22px 18px 76px;}
 
 /* ── Section heading ── */
 .sec-head{font-size:10px;font-weight:800;color:var(--muted);letter-spacing:1.2px;
@@ -667,7 +672,21 @@ html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavi
 .pc-opp-inner{display:inline-flex;align-items:center;gap:3px;}
 .pc-opp-logo{width:14px;height:14px;object-fit:contain;}
 .pc-at,.pc-vs{font-size:8.5px;font-weight:800;color:var(--muted);}
-.pc-row-bye .pc-opp,.pc-row-dnp .pc-opp{color:var(--muted);font-size:9.5px;}
+.pc-row-bye .pc-opp{color:var(--muted);font-size:9.5px;}
+.pc-row-dnp .pc-cell,.pc-row-future .pc-cell{opacity:.6;}
+.pc-row-dnp .pc-opp,.pc-row-future .pc-opp{opacity:.85;}
+/* ── Defense vs position ──
+   The opponent code tinted by how generous that defense has been to the player's position
+   this season (49-dvp.js): green is a matchup to attack, red a tough draw. Applied after the
+   table renders, so the code is styled as a plain span until then. */
+.pc-opp-code{border-radius:4px;padding:0 3px;margin:0 -3px;}
+.pc-dvp{cursor:help;font-weight:900;margin:0;}
+.pc-dvp-easy{color:#8ff0a6;background:rgba(63,185,80,.2);}
+.pc-dvp-mid{color:#ffd98a;background:rgba(210,153,34,.16);}
+.pc-dvp-hard{color:#ffa9a4;background:rgba(248,81,73,.2);}
+.pc-dvp-slot{font-size:9.5px;color:var(--muted);padding:6px 2px 0;line-height:1.5;}
+.pc-dvp-slot:empty{display:none;}
+.pc-dvp-key{display:inline-block;border-radius:4px;padding:0 5px;margin-right:4px;font-weight:800;font-size:9px;}
 .pc-started{color:var(--accent);font-size:8px;margin-left:3px;vertical-align:super;}
 .pc-total-row .pc-wk{color:var(--accent);font-weight:900;}
 .pc-total-row .pc-opp{color:var(--muted);font-weight:700;font-size:9.5px;}
@@ -737,6 +756,41 @@ html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavi
   background:rgba(210,153,34,.12);border:1px solid rgba(210,153,34,.28);
   border-radius:5px;padding:1px 7px;margin-left:auto;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;max-width:100%;}
+
+/* ── Path to win ──
+   What the trailing side has to do, category by category, while the week is live. Each
+   chip is one category to take: the amount that takes the lead, tinted by how it compares
+   with what the remaining starters are projected for. */
+.mc-need{padding:7px 12px 8px;background:rgba(210,153,34,.06);border-bottom:1px solid rgba(210,153,34,.22);
+  display:flex;flex-direction:column;gap:5px;}
+.mc-need-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;}
+.mc-need-lbl{font-size:8.5px;font-weight:900;letter-spacing:1px;color:var(--warn);
+  text-transform:uppercase;flex:none;}
+.mc-need-txt{font-size:11.5px;color:var(--text);min-width:0;}
+.mc-need-txt b{font-weight:800;}
+.mc-need-left{font-size:9.5px;font-weight:800;color:var(--muted);margin-left:auto;flex:none;
+  border:1px dotted var(--border2);border-radius:4px;padding:1px 6px;cursor:help;}
+.mc-need-list{display:flex;flex-wrap:wrap;gap:5px;}
+.mc-need-item{display:inline-flex;align-items:baseline;gap:5px;font-size:11px;font-weight:700;
+  border:1px solid var(--border);border-radius:6px;padding:3px 8px;background:var(--surface2);
+  color:var(--text);cursor:help;white-space:nowrap;}
+.mc-need-item b{font-family:var(--mono);font-size:12px;font-weight:800;}
+.mc-need-cat{color:var(--muted);font-weight:700;}
+.mc-need-proj{font-size:9.5px;font-weight:600;color:var(--muted);}
+.mc-need-likely{border-color:rgba(63,185,80,.45);background:rgba(63,185,80,.1);}
+.mc-need-likely b{color:#8ff0a6;}
+.mc-need-stretch{border-color:rgba(210,153,34,.45);background:rgba(210,153,34,.1);}
+.mc-need-stretch b{color:#ffd98a;}
+.mc-need-long{border-color:rgba(248,81,73,.4);background:rgba(248,81,73,.08);}
+.mc-need-long b{color:#ffa9a4;}
+.mc-need-hold{font-size:10.5px;color:var(--muted);}
+.mc-need-holdcat{font-weight:800;color:var(--text);cursor:help;border-bottom:1px dotted var(--border2);}
+.mc-need-holdcat.risk{color:#ffd98a;}
+.mc-need-out{flex-direction:row;align-items:baseline;gap:8px;flex-wrap:wrap;
+  background:rgba(248,81,73,.06);border-bottom-color:rgba(248,81,73,.25);}
+.mc-need-out .mc-need-lbl{color:var(--danger);}
+.mc-need-out .mc-need-txt{color:var(--muted);}
+.mc-need-out .mc-need-txt b{color:var(--text);}
 /* ── Playoff bracket ── */
 .playoff-wrap{display:flex;flex-direction:column;gap:32px;}
 .playoff-section-title{font-size:15px;font-weight:900;display:flex;align-items:center;gap:10px;
@@ -813,7 +867,7 @@ html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavi
   .matchups-grid{grid-template-columns:1fr;}
   .leaders-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
   .header{padding:8px 10px;gap:7px;padding-top:calc(8px + env(safe-area-inset-top, 0px));}
-  .page{padding:14px 12px calc(50px + env(safe-area-inset-bottom, 0px));}
+  .page{padding:14px 12px calc(72px + env(safe-area-inset-bottom, 0px));}
   .week-label{min-width:64px;font-size:12px;}
   .tabs{padding:0 10px;}
   .tab{padding:10px 14px;}
@@ -869,7 +923,7 @@ html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavi
   .leaders-grid{grid-template-columns:1fr;}
 }
 @media(max-width:420px){
-  .page{padding:11px 9px calc(44px + env(safe-area-inset-bottom, 0px));}
+  .page{padding:11px 9px calc(70px + env(safe-area-inset-bottom, 0px));}
   .logo{font-size:15px;}
   .updated-tag{display:none;}          /* the ↻ countdown already says how fresh this is */
   .ar-toggle{padding:4px 7px;}
@@ -886,6 +940,25 @@ html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavi
   .pc-hero{--plateW:clamp(110px,26vh,150px);}
   .pc-hero-img{height:clamp(84px,24vh,120px);}
 }
+/* ── TripleCrown link ────────────────────────────────────────────────────────
+   The crown in the bottom-right corner opens BAFL's sibling app. A fixed, round, thumb-sized
+   target with the logo inline as a data URI (6KB) — no extra request, works offline. It sits
+   above the page but below every overlay, and disappears entirely while one is open. */
+.tc-link{position:fixed;z-index:300;
+  right:calc(14px + env(safe-area-inset-right,0px));
+  bottom:calc(14px + env(safe-area-inset-bottom,0px));
+  width:48px;height:48px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(22,27,34,.92);border:1px solid var(--border);
+  box-shadow:0 6px 22px rgba(0,0,0,.5);
+  transition:transform .15s,border-color .15s,box-shadow .15s;
+  -webkit-tap-highlight-color:transparent;}
+.tc-link img{width:32px;height:auto;display:block;pointer-events:none;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.4));}
+.tc-link:hover{transform:translateY(-2px);border-color:#1599E6;box-shadow:0 8px 26px rgba(21,153,230,.35);}
+.tc-link:active{transform:translateY(0);}
+.tc-link:focus-visible{outline:2px solid #1599E6;outline-offset:2px;}
+html.pc-locked .tc-link{display:none;}
 </style>
 </head>
 <body>
@@ -934,6 +1007,13 @@ html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavi
   </div>
 </div>
 
+<!-- BAFL's sibling app. Just the crown, in the corner, on every screen. Hidden while an
+     overlay is open (html.pc-locked) so it never stacks with a card's close button. -->
+<a class="tc-link" href="https://sengi12.github.io/triplecrown/" target="_blank" rel="noopener"
+   title="Open TripleCrown" aria-label="Open TripleCrown, the projections app">
+  <img src="data:image/png;base64,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" alt="TripleCrown" width="120" height="79" decoding="async">
+</a>
+
 <div id="toast"></div>
 
 <script>
@@ -950,6 +1030,12 @@ const AR_INTERVAL_MS       = 5 * 60 * 1000;  // auto-refresh every 5 min
 const REGULAR_SEASON_WEEKS = 14;              // weeks 1–14 are regular season
 const DH_WEEKS             = [2, 3, 13, 14];  // weeks that have a double header
 const PLAYOFF_CUTOFF       = 4;              // top 4 teams make playoffs
+// The app does not turn over to a new week the moment Sleeper does (Tuesday, hours after
+// Monday Night Football). The finished week stays in view until this hour, Eastern, on the
+// Wednesday that starts the next NFL week — see 12-week-clock.js.
+const WEEK_ROLLOVER_HOUR_ET = 6;
+// BAFL's sibling app. The crown in the corner of every screen opens it.
+const TRIPLECROWN_URL      = 'https://sengi12.github.io/triplecrown/';
 
 // ─── Sleeper endpoints ────────────────────────────────────────────────────
 const SLEEPER_PLAYERS_URL    = `${API}/players/nfl`;
@@ -965,6 +1051,13 @@ const SLEEPER_WEEKLY_URL     = (pid, season) =>
 const BAFL_POSITIONS = ['QB', 'RB', 'WR', 'TE', 'K'];
 const SLEEPER_WEEK_PROJ_URL  = (season, week) =>
   `${API2}/projections/nfl/${season}/${week}?season_type=regular`
+  + BAFL_POSITIONS.map(p => `&position[]=${p}`).join('');
+
+// Every skill player's stat line for one week, with the OPPONENT on each row — what the
+// defense-vs-position matchup colours on the player card are built from (49-dvp.js).
+// Position-filtered like the projections request, for the same reason.
+const SLEEPER_WEEK_STATS_URL = (season, week) =>
+  `${API2}/stats/nfl/${season}/${week}?season_type=regular`
   + BAFL_POSITIONS.map(p => `&position[]=${p}`).join('');
 
 // Game state, for blending what has happened into the projections (58-projections.js).
@@ -993,7 +1086,8 @@ const S = {
   rosters: [],
   userMap:   {},
   rosterMap: {},
-  currentWeek: 1,
+  currentWeek: 1,    // the week the app opens on — Sleeper's week, held back until Wednesday
+  maxWeek: 1,        // the newest week Sleeper has opened; reachable with › before the rollover
   selectedWeek: 1,
   activeTab: 'matchups',
   weekCache: {},     // `${leagueId}:${week}` → {matchups, stats}
@@ -1005,6 +1099,10 @@ const S = {
   playersPromise: null, // in-flight load, so concurrent callers share one fetch
   ownerByPid: null,     // pid → roster_id, rebuilt per season (drives "who rosters him?")
   nflSeason: null,      // current NFL season year, from Sleeper's state endpoint
+  nflState: null,       // the whole state payload (season, week, season_start_date)
+  nflStatePromise: null,
+  nflSchedCache: {},    // season → {at, games, byTeam} — the NFL schedule with per-game status
+  dvpCache: {},         // season → promise of defense-vs-position ranks (49-dvp.js)
   weeklyCache: {},      // `${season}:${pid}` → raw weekly json (player card)
   projCache: {},        // `${season}:${week}` → {stats: pid → projected stats, game: pid → game_id, team: pid → code, at}
   seasonStarted: false, // false when league is pre_draft / not yet scheduled
@@ -1388,6 +1486,61 @@ function buildSeasonPicker(seasons) {
   sel.disabled = seasons.length <= 1;
 }
 
+// ─── Week clock ───────────────────────────────────────────────────────────
+// Sleeper advances a league's week (`leg`) on Tuesday, a few hours after Monday Night
+// Football. Nobody wants the app to flip to next week's empty matchups while the one that just
+// finished is still being savoured — or disputed — so the week the app opens on is held until
+// Wednesday morning.
+//
+// The NFL week is counted from the season's start date, which Sleeper publishes in its state
+// payload and which is always the Wednesday before the opening Thursday. Week N therefore
+// begins 7·(N−1) days after it, at WEEK_ROLLOVER_HOUR_ET (Eastern, because that is the clock
+// the NFL runs on — a West Coast reader gets the new week at 3am, not at 6). Until that
+// moment the previous week stays in view, and the newly opened one is a tap away on ›, tagged
+// "next" so it's clear the app hasn't turned over yet.
+
+// The Eastern-time calendar date and hour of an instant.
+function etClock(ms) {
+  const d = new Date(ms);
+  try {
+    const f = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York',
+      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false });
+    const o = {};
+    for (const p of f.formatToParts(d)) o[p.type] = p.value;
+    return { y: +o.year, m: +o.month, d: +o.day, h: (+o.hour) % 24 };
+  } catch {
+    // No time-zone support (very old engines): assume EDT, which covers September–October.
+    const e = new Date(ms - 4 * 3600e3);
+    return { y: e.getUTCFullYear(), m: e.getUTCMonth() + 1, d: e.getUTCDate(), h: e.getUTCHours() };
+  }
+}
+
+// Which NFL week the calendar says it is, given the season's start date ('YYYY-MM-DD').
+// Week 1 before the season opens; null if the date can't be read. The start date is snapped
+// back to a Wednesday in case Sleeper ever publishes the Thursday kickoff instead.
+function calendarWeek(startDate, nowMs) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(startDate || ''));
+  if (!m) return null;
+  let start = Date.UTC(+m[1], +m[2] - 1, +m[3]);
+  const dow = new Date(start).getUTCDay();          // 0 = Sunday … 3 = Wednesday
+  start -= ((dow - 3 + 7) % 7) * 864e5;
+  const now = etClock(nowMs == null ? Date.now() : nowMs);
+  let days = Math.round((Date.UTC(now.y, now.m - 1, now.d) - start) / 864e5);
+  if (now.h < WEEK_ROLLOVER_HOUR_ET) days -= 1;   // still "last night" until the rollover hour
+  if (days < 0) return 1;
+  return Math.floor(days / 7) + 1;
+}
+
+// The week the app should open on: Sleeper's week, capped by the calendar. The cap only
+// applies when the state payload describes the same season as the league in view — in the
+// offseason Sleeper's state is already on next year while the league is still last year's.
+function heldWeek(leg, state, leagueSeason, nowMs) {
+  const sleeperWeek = Math.max(1, Number(leg) || 1);
+  if (!state || !state.season_start_date) return sleeperWeek;
+  if (leagueSeason != null && state.season != null && String(state.season) !== String(leagueSeason)) return sleeperWeek;
+  const cal = calendarWeek(state.season_start_date, nowMs);
+  return cal == null ? sleeperWeek : Math.max(1, Math.min(sleeperWeek, cal));
+}
 // ─── Bootstrap ────────────────────────────────────────────────────────────
 async function init() {
   try {
@@ -1403,7 +1556,6 @@ async function init() {
     // and player leaders, and after the first visit it comes straight out of Cache Storage —
     // starting it here means those views are usually instant instead of waiting on a download.
     loadPlayers().catch(() => { /* surfaced when a view that needs it is opened */ });
-    currentNflSeason();
     await loadSeason(0);
   } catch(e) {
     setError('Failed to load league: ' + e.message);
@@ -1435,7 +1587,12 @@ async function loadSeason(idx) {
   // or 'complete' all mean the schedule exists. Pre-draft / drafting = not started.
   const status = (league.status || '').toLowerCase();
   S.seasonStarted = !['pre_draft', 'drafting', ''].includes(status) && leg > 0;
-  S.currentWeek   = S.seasonStarted ? Math.max(1, leg) : 1;
+  // `leg` is the week Sleeper has opened. The week the app OPENS ON lags it until Wednesday
+  // morning (12-week-clock.js), so Monday night's result is still the first thing you see on
+  // Tuesday. Only the live season has a clock to consult; past seasons open on their last week.
+  S.maxWeek       = S.seasonStarted ? Math.max(1, leg) : 1;
+  const state     = isCurrentSeason() ? await loadNflState() : null;
+  S.currentWeek   = S.seasonStarted ? heldWeek(leg, state, league.season) : 1;
   S.selectedWeek  = S.currentWeek;
 
   document.getElementById('seasonSel').value    = String(idx);
@@ -1457,11 +1614,12 @@ async function switchSeason(idxStr) {
 }
 
 // ─── Auto-refresh ─────────────────────────────────────────────────────────
-// Active only when: current season, current week, matchups tab, page visible.
+// Active only when: current season, a live week (the one in view or the one Sleeper has
+// opened ahead of the Wednesday rollover), matchups tab, page visible.
 function shouldAutoRefresh() {
   return S.arEnabled
       && isCurrentSeason()
-      && S.selectedWeek === S.currentWeek
+      && S.selectedWeek >= S.currentWeek && S.selectedWeek <= S.maxWeek
       && S.activeTab === 'matchups'
       && !document.hidden;
 }
@@ -1517,15 +1675,20 @@ document.addEventListener('visibilitychange', () => {
 function updateWeekDisplay() {
   const isDH = DH_WEEKS.includes(S.selectedWeek);
   const dhDot = isDH ? '<span class="dh-dot" title="Double Header week"></span>' : '';
-  document.getElementById('weekLabel').innerHTML = `Week ${S.selectedWeek}${dhDot}`;
+  // A week Sleeper has opened but the app hasn't turned over to yet (12-week-clock.js).
+  const upcoming = S.selectedWeek > S.currentWeek;
+  const tag = upcoming
+    ? `<span class="wk-tag" title="Sleeper has opened this week; BAFL turns over to it Wednesday at ${WEEK_ROLLOVER_HOUR_ET}am ET">next</span>`
+    : '';
+  document.getElementById('weekLabel').innerHTML = `Week ${S.selectedWeek}${dhDot}${tag}`;
   document.getElementById('btnPrev').disabled = S.selectedWeek <= 1;
-  document.getElementById('btnNext').disabled = S.selectedWeek >= S.currentWeek;
+  document.getElementById('btnNext').disabled = S.selectedWeek >= S.maxWeek;
   document.getElementById('updatedTag').textContent = `Updated ${new Date().toLocaleTimeString()}`;
 }
 
 async function changeWeek(d) {
   const nw = S.selectedWeek + d;
-  if (nw < 1 || nw > S.currentWeek) return;
+  if (nw < 1 || nw > S.maxWeek) return;
   S.selectedWeek = nw;
   updateWeekDisplay();
   stopAutoRefresh();
@@ -1845,9 +2008,21 @@ function ownerOf(pid) {
 // years_exp is wrong or missing often enough that the card also treats an empty stats response
 // as "no games that year" and greys the tab out. Deriving the list up front means the tabs
 // render instantly; verifying lazily means a bad years_exp self-corrects on first click.
+// Sleeper's NFL state — season, week, and the season's start date (which the week clock in
+// 12-week-clock.js runs on). Fetched once per session and shared by everything that asks.
+async function loadNflState() {
+  if (S.nflState) return S.nflState;
+  if (!S.nflStatePromise) {
+    S.nflStatePromise = fetchSoft(SLEEPER_STATE_URL).then(st => {
+      S.nflState = (st && typeof st === 'object') ? st : {};
+      return S.nflState;
+    });
+  }
+  return S.nflStatePromise;
+}
 async function currentNflSeason() {
   if (S.nflSeason) return S.nflSeason;
-  const st = await fetchSoft(SLEEPER_STATE_URL);
+  const st = await loadNflState();
   const yr = st && (st.season || st.league_season);
   // Fall back to the league we're viewing rather than the wall clock — in January the calendar
   // year has already rolled over but the NFL season being played has not.
@@ -2661,9 +2836,16 @@ async function pcSelectSeason(season, opts) {
   const body = document.getElementById('pcBody');
   if (body) body.innerHTML = `<div class="pc-loading">Loading ${esc(season)} game log…</div>`;
 
-  let weekly;
+  // The live season also carries the games still to come, from the NFL schedule, so the
+  // card shows the whole slate — and the defense-vs-position colours can be laid over it.
+  const live = String(await currentNflSeason()) === String(PC.season) && !!PC.team;
+  if (tok !== pcToken || !PC) return;
+  let weekly, sched = null;
   try {
-    weekly = await fetchPlayerWeekly(pid, PC.season);
+    [weekly, sched] = await Promise.all([
+      fetchPlayerWeekly(pid, PC.season),
+      live ? loadNflSchedule(PC.season) : null,
+    ]);
   } catch {
     if (tok !== pcToken || !PC) return;
     PC.seasonState[PC.season] = 'unknown';
@@ -2674,6 +2856,7 @@ async function pcSelectSeason(season, opts) {
   if (tok !== pcToken || !PC || PC.pid !== pid) return;
 
   const rows = pcSeasonRows(weekly);
+  if (live && sched) pcFillSchedule(rows, sched, PC.team);
   if (!rows.length) {
     PC.seasonState[PC.season] = 'empty';
     // Walk to the next-newest candidate with data, but bound the search — a genuinely
@@ -2690,10 +2873,63 @@ async function pcSelectSeason(season, opts) {
   PC.seasonState[PC.season] = 'ok';
   renderPcSeasonTabs();
   if (body) {
-    body.innerHTML = renderPcSeason(PC.season, rows, PC.pos) +
+    body.innerHTML = renderPcSeason(PC.season, rows, PC.pos, { live }) +
       `<div class="pc-src">Per-game stats via Sleeper · category values use BAFL scoring.</div>`;
     applyConsistencyBadge(PC.season, rows, PC.pos);
+    if (live) applyDvpColors(PC.season, PC.pos);
     pcEnableStickyStatHeaders();
+  }
+}
+
+// Fill the live season's missing weeks from the NFL schedule, in place: a game still to be
+// played becomes an upcoming row (opponent shown, stats blank); a finished game the player
+// has no row for is a DNP; a week with no game is a bye. Weeks the feed already covers are
+// left alone. Nothing here counts toward totals or the consistency grade — those only ever
+// read games actually played.
+function pcFillSchedule(rows, sched, team) {
+  const byWeek = sched && sched.byTeam && sched.byTeam[String(team || '').toUpperCase()];
+  if (!byWeek) return rows;
+  const have = new Set(rows.map(r => r.wk));
+  const empty = baflPlayerCats({});
+  for (let wk = 1; wk <= 18; wk++) {
+    if (have.has(wk)) continue;
+    const g = byWeek[wk];
+    if (!g) { rows.push({ wk, opp: null, isAway: false, gp: 0, team, stats: {}, cats: empty, bye: true, dnp: false, future: false }); continue; }
+    const done = g.status === 'complete';
+    rows.push({ wk, opp: g.opp, isAway: !g.home, gp: 0, team, stats: {}, cats: empty,
+      bye: false, dnp: done, future: !done });
+  }
+  rows.sort((a, b) => a.wk - b.wk);
+  return rows;
+}
+
+// Lay the defense-vs-position tiers over every opponent code in the body once the ranks
+// arrive (49-dvp.js). Patches in place — the table rendered without waiting for this.
+async function applyDvpColors(season, pos) {
+  const P = String(pos || '').toUpperCase();
+  if (!BAFL_POSITIONS.includes(P)) return;
+  const dvp = await loadDvp(season);
+  if (!dvp || !PC || String(PC.season) !== String(season) || PC.mode !== 'nfl') return;
+  const body = document.getElementById('pcBody');
+  if (!body) return;
+  const n = dvp.n[P] || 0;
+  const what = P === 'K' ? 'kicking points' : 'yards + TDs';
+  body.querySelectorAll('.pc-opp-code[data-opp]').forEach(el => {
+    const def = el.dataset.opp;
+    const rank = dvp.ranks[def] && dvp.ranks[def][P];
+    const tier = dvpTier(rank, n);
+    if (!tier) return;
+    el.classList.add('pc-dvp', `pc-dvp-${tier}`);
+    const pg = dvp.perGame[def][P];
+    el.title = `${def} allows the ${ordinal(rank)}-most ${what} to ${P}s of ${n} defenses `
+      + `(${Math.round(pg * 10) / 10} per game${dvp.prior ? ', blended with last season this early in the year' : ''}) — `
+      + (tier === 'easy' ? 'a matchup to attack' : tier === 'hard' ? 'a tough draw' : 'middle of the pack');
+  });
+  const slot = body.querySelector('.pc-dvp-slot');
+  if (slot) {
+    slot.innerHTML = `<span class="pc-dvp-key pc-dvp-easy">soft</span><span class="pc-dvp-key pc-dvp-mid">average</span>`
+      + `<span class="pc-dvp-key pc-dvp-hard">tough</span> matchups for ${P}s — by ${what} each defense allows per game`
+      + `${dvp.prior ? ', last season filling in until six games are played' : ` over ${dvp.weeks} week${dvp.weeks === 1 ? '' : 's'}`}.`;
   }
 }
 
@@ -2776,7 +3012,10 @@ function pcDerived(key, s) {
 }
 
 // ─── Season table ─────────────────────────────────────────────────────────
-function renderPcSeason(season, rows, pos) {
+// `opts.live` marks the season in progress: its rows include the games still to come, and
+// a legend slot for the defense-vs-position colours is rendered under the table.
+function renderPcSeason(season, rows, pos, opts) {
+  opts = opts || {};
   const P = String(pos || '').toUpperCase();
   const cats = pcCatsForPos(P);
   const box = PC_BOX_SCHEMA[P];
@@ -2809,10 +3048,15 @@ function renderPcSeason(season, rows, pos) {
   const bodyRows = rows.map(r => {
     const nCells = catCols.length + (showTotal ? 1 : 0) + (gap ? 1 : 0) +
       (box ? box.cols.length + (box.groups.length - 1) : 0);
-    if (r.bye || r.dnp) {
-      const label = r.bye ? 'BYE' : 'DNP';
-      return `<tr class="pc-row-${r.bye ? 'bye' : 'dnp'}"><td class="pc-wk">${r.wk}</td>` +
-        `<td class="pc-opp">${label}</td><td class="pc-cell bye" colspan="${nCells}">–</td></tr>`;
+    // A missed or upcoming game keeps its opponent — it is still a real matchup on a real
+    // schedule, and the defense-vs-position colour belongs on it. Only a true bye says BYE.
+    if (r.bye || r.dnp || r.future) {
+      const kind = r.bye ? 'bye' : r.dnp ? 'dnp' : 'future';
+      const oppCell = r.opp ? pcOppInner(r) : (r.bye ? 'BYE' : '–');
+      const title = r.bye ? 'Bye week' : r.dnp ? 'Did not play — not counted in totals or the consistency grade' : 'Upcoming game';
+      return `<tr class="pc-row-${kind}"><td class="pc-wk">${r.wk}</td>` +
+        `<td class="pc-opp ${r.opp ? (r.isAway ? 'away' : 'home') : ''}" title="${title}">${oppCell}</td>` +
+        `<td class="pc-cell bye" colspan="${nCells}">${r.dnp ? 'DNP' : '–'}</td></tr>`;
     }
     let cells = catCols.map(c => {
       const v = r.cats[c.key] || 0;
@@ -2832,10 +3076,7 @@ function renderPcSeason(season, rows, pos) {
         return sep + `<td class="pc-cell ${c.color ? c.color(v) : ''}">${display}</td>`;
       }).join('');
     }
-    const oppTxt = r.opp
-      ? `<span class="pc-opp-inner">${r.isAway ? '<span class="pc-at">@</span>' : '<span class="pc-vs">vs</span>'}` +
-        `<img src="${NFL_LOGO(r.opp)}" class="pc-opp-logo" onerror="this.style.display='none'"><span>${esc(r.opp)}</span></span>`
-      : '–';
+    const oppTxt = r.opp ? pcOppInner(r) : '–';
     const started = pcStartedFlag(season, r.wk);
     return `<tr><td class="pc-wk">${r.wk}${started}</td>` +
       `<td class="pc-opp ${r.isAway ? 'away' : 'home'}">${oppTxt}</td>${cells}</tr>`;
@@ -2843,6 +3084,7 @@ function renderPcSeason(season, rows, pos) {
 
   const totalsRow = pcTotalsRow(rows, P, catCols, showTotal, totalBench, box);
   const teamTag = pcSeasonTeamTag(rows);
+  const dvpSlot = (opts.live && BAFL_POSITIONS.includes(P)) ? `<div class="pc-dvp-slot"></div>` : '';
   return `<div class="pc-season">
     <div class="pc-season-title">${esc(season)}${teamTag}${pcSeasonBadges(rows, P, season)}</div>
     <div class="pc-table-scroll"><table class="pc-table">
@@ -2852,7 +3094,16 @@ function renderPcSeason(season, rows, pos) {
       </thead>
       <tbody>${bodyRows}${totalsRow}</tbody>
     </table></div>
+    ${dvpSlot}
   </div>`;
+}
+
+// "@ PHI" / "vs PHI" with the club logo. The code carries data-opp so the defense-vs-
+// position pass can find and tint it.
+function pcOppInner(r) {
+  return `<span class="pc-opp-inner">${r.isAway ? '<span class="pc-at">@</span>' : '<span class="pc-vs">vs</span>'}` +
+    `<img src="${NFL_LOGO(r.opp)}" class="pc-opp-logo" onerror="this.style.display='none'">` +
+    `<span class="pc-opp-code" data-opp="${escAttr(r.opp)}">${esc(r.opp)}</span></span>`;
 }
 
 // Season totals: category values sum, counting stats sum, "long" columns take the max, and
@@ -3367,6 +3618,170 @@ function consistencyGrade(rate) {
   for (const [floor, g] of CONSISTENCY_CURVE) if (rate >= floor) return g;
   return 'F';
 }
+// ═══════════════════════════════════════════════════════════════════════════
+// Defense vs position
+// ═══════════════════════════════════════════════════════════════════════════
+// The player card lists a player's whole season — games played and games to come — and
+// colours each opponent by how generous that defense has been to his position, the way
+// Sleeper does: green for a defense that gives up a lot to the position, red for one that
+// shuts it down. "Generous" is measured in BAFL terms, not fantasy points: the category
+// yards a defense allows plus 20 per touchdown (roughly what a score is worth against the
+// yardage categories), or kicking points allowed for kickers.
+//
+// NO SEED, same as everything else here. Sleeper's weekly stat rows carry the opponent on
+// every line, so one position-filtered request per week (~90KB gzipped) gives every
+// defense's allowed production for that week. Each completed week's aggregate is tiny and
+// never changes, so it is persisted in Cache Storage — the season is downloaded once per
+// device, not once per card. Only the week in progress is refetched.
+//
+// "The season as a whole" is thin in September. Until DVP_PRIOR_GAMES games have been
+// played, last season's per-game figure fills in for the games not yet played (a defense
+// with two games this year is judged on those two plus four games' worth of last year's
+// average), so week 2 colours are still worth reading and the blend fades out by October.
+
+const DVP_PRIOR_GAMES = 6;
+const DVP_CACHE = 'bafl-dvp-v1';
+const DVP_BATCH = 4;
+
+// One stat line → the production BAFL cares about, as one number.
+function dvpMetric(stats, pos) {
+  const c = baflPlayerCats(stats);
+  return pos === 'K' ? c.kicking : baflTotalYards(c) + 20 * c.tds;
+}
+
+// One week of Sleeper rows → { DEF: { POS: total allowed } }. Only players who actually
+// played count, and — for a week still in progress — only rows from games that are over,
+// so a half-played game can't be credited as a full one. `doneGames` is null for a
+// completed week (everything counts) or the set of finished game_ids otherwise.
+function dvpWeekAggregate(rows, doneGames) {
+  const agg = {};
+  for (const r of (rows || [])) {
+    const s = r.stats;
+    if (!s || !(s.gp > 0)) continue;
+    if (doneGames && !doneGames.has(String(r.game_id))) continue;
+    const def = String(r.opponent || '').toUpperCase();
+    if (!def) continue;
+    const pos = String((r.player && r.player.position) || s.pos || '').toUpperCase();
+    if (!BAFL_POSITIONS.includes(pos)) continue;
+    const t = agg[def] = agg[def] || {};
+    t[pos] = (t[pos] || 0) + dvpMetric(s, pos);
+  }
+  return agg;
+}
+
+// Rank 1 = the MOST allowed = the matchup to attack. Per position, over the defenses that
+// have a figure; `n` is how many were ranked, for the tier bands.
+function dvpRanks(perGame) {
+  const ranks = {}, n = {};
+  for (const pos of BAFL_POSITIONS) {
+    const order = Object.keys(perGame).filter(d => perGame[d][pos] != null)
+      .sort((a, b) => perGame[b][pos] - perGame[a][pos]);
+    n[pos] = order.length;
+    order.forEach((d, i) => { (ranks[d] = ranks[d] || {})[pos] = i + 1; });
+  }
+  return { ranks, n };
+}
+// 'easy' for the top ~30%, 'hard' for the bottom ~30%, 'mid' between; '' when unranked.
+function dvpTier(rank, n) {
+  if (!rank || !n) return '';
+  const band = Math.ceil(n * 0.3);
+  return rank <= band ? 'easy' : rank > n - band ? 'hard' : 'mid';
+}
+
+// ── Per-week aggregates, persisted ────────────────────────────────────────
+async function readDvpWeek(key) {
+  try {
+    if (!('caches' in window)) return null;
+    const c = await caches.open(DVP_CACHE);
+    const hit = await c.match(`dvp/${key}`);
+    return hit ? await hit.json() : null;
+  } catch { return null; }
+}
+async function writeDvpWeek(key, agg) {
+  try {
+    if (!('caches' in window)) return;
+    const c = await caches.open(DVP_CACHE);
+    await c.put(`dvp/${key}`, new Response(JSON.stringify(agg), { headers: { 'Content-Type': 'application/json' } }));
+  } catch { /* private mode or quota — recomputed next session */ }
+}
+async function dvpWeek(season, week, doneGames) {
+  const key = `${season}:${week}`;
+  const complete = !doneGames;
+  if (complete) { const hit = await readDvpWeek(key); if (hit) return hit; }
+  const rows = await fetchSoft(SLEEPER_WEEK_STATS_URL(season, week), null);
+  if (!Array.isArray(rows)) return null;
+  const agg = dvpWeekAggregate(rows, doneGames);
+  if (complete && Object.keys(agg).length) writeDvpWeek(key, agg);
+  return agg;
+}
+
+// ── The season ────────────────────────────────────────────────────────────
+// Resolves to {perGame: DEF → POS → allowed per game, ranks, n, games, weeks, prior} or
+// null when nothing could be loaded. Cached per season for the session; a failure is not
+// cached, so the next card gets another try.
+function loadDvp(season, opts) {
+  const key = String(season);
+  if (S.dvpCache[key]) return S.dvpCache[key];
+  S.dvpCache[key] = buildDvp(season, opts || {}).catch(() => null)
+    .then(v => { if (!v) delete S.dvpCache[key]; return v; });
+  return S.dvpCache[key];
+}
+
+async function buildDvp(season, opts) {
+  const sched = await loadNflSchedule(season);
+  if (!sched) return null;
+  // Completed games per defense, and the weeks with any — the schedule is the divisor, so a
+  // shutout (no rows for a position) still counts as a game the defense played.
+  const games = {}, byWeek = {};
+  for (const g of sched.games) {
+    const wk = Number(g.week);
+    if (!wk || wk > 18) continue;
+    const st = String(g.status || '').toLowerCase();
+    (byWeek[wk] = byWeek[wk] || { all: 0, done: new Set() }).all++;
+    if (st !== 'complete') continue;
+    byWeek[wk].done.add(String(g.game_id));
+    games[g.home] = (games[g.home] || 0) + 1;
+    games[g.away] = (games[g.away] || 0) + 1;
+  }
+  const weeks = Object.keys(byWeek).map(Number).filter(w => byWeek[w].done.size > 0).sort((a, b) => a - b);
+  const totals = {};
+  for (let i = 0; i < weeks.length; i += DVP_BATCH) {
+    const chunk = weeks.slice(i, i + DVP_BATCH);
+    const aggs = await Promise.all(chunk.map(w => {
+      const b = byWeek[w];
+      return dvpWeek(season, w, b.done.size === b.all ? null : b.done);
+    }));
+    for (const agg of aggs) {
+      for (const def in (agg || {})) {
+        const t = totals[def] = totals[def] || {};
+        for (const pos in agg[def]) t[pos] = (t[pos] || 0) + agg[def][pos];
+      }
+    }
+  }
+  // Early season: last year's per-game figure stands in for the games not yet played.
+  let prior = null;
+  const thin = weeks.length < DVP_PRIOR_GAMES;
+  if (thin && !opts.noPrior && Number(season) - 1 >= EARLIEST_STAT_SEASON) {
+    prior = await loadDvp(Number(season) - 1, { noPrior: true });
+  }
+  if (!weeks.length && !prior) return null;
+  const perGame = {};
+  const codes = new Set([...Object.keys(games), ...Object.keys(prior ? prior.perGame : {})]);
+  for (const def of codes) {
+    const g = games[def] || 0;
+    const w = prior ? Math.max(0, DVP_PRIOR_GAMES - g) : 0;
+    perGame[def] = {};
+    for (const pos of BAFL_POSITIONS) {
+      const v = (totals[def] && totals[def][pos]) || 0;
+      const pv = prior && prior.perGame[def] ? prior.perGame[def][pos] : null;
+      const num = v + (pv != null ? pv * w : 0);
+      const den = g + (pv != null ? w : 0);
+      if (den > 0) perGame[def][pos] = num / den;
+    }
+  }
+  const { ranks, n } = dvpRanks(perGame);
+  return { season: String(season), weeks: weeks.length, games, perGame, ranks, n, prior: !!prior };
+}
 // ─── Core BAFL stat calculation ───────────────────────────────────────────
 // BAFL is a five-category league, not a points league. Every view in the app — matchups,
 // standings, leaders, and now the player card — has to agree on exactly what a stat line is
@@ -3466,6 +3881,10 @@ function calcResult(cs, rid1, rid2) {
 // narrow data columns, which fit any phone; it still gets a scroll wrapper with a frozen
 // category column as a safety net for very long category labels at large text sizes.
 //
+// Below the projected score, while the week is live, sits the path-to-win callout
+// (57-comeback.js) for whichever side is behind: the categories it has to take, by how much,
+// and who it has left to take them with — or the plain statement that it can't.
+//
 // Under the names sits the win-probability bar (59-winprob.js). It renders in three states:
 // live (blended projections in hand), decided (both lineups finished, or a past week — the
 // result is the probability, 100/0), and not yet (current week, projections still loading).
@@ -3519,6 +3938,14 @@ function matchupCard(rid1, rid2, cs, pcs) {
     pt2 = `<span class="mc-proj">→${Math.round(pr.ty2)}</span>`;
   }
 
+  // The side behind on the live result gets the path-to-win; a dead heat gets one each.
+  let need = '';
+  if (pcs) {
+    const level = r.s1dec === r.s2dec;
+    if (r.s1dec < r.s2dec || level) need += comebackHTML(comebackPlan(cs, pcs, rid1, rid2), S.rosterMap[rid1] || `Team ${rid1}`);
+    if (r.s2dec < r.s1dec || level) need += comebackHTML(comebackPlan(cs, pcs, rid2, rid1), S.rosterMap[rid2] || `Team ${rid2}`);
+  }
+
   return `
   <div class="mc">
     <div class="mc-head">
@@ -3534,6 +3961,7 @@ function matchupCard(rid1, rid2, cs, pcs) {
     </div>
     ${wp ? winBarHTML(wp, !live) : ''}
     ${pcs ? projScoreHTML(pcs, rid1, rid2) : ''}
+    ${need}
     <div class="mc-table-scroll">
       <table class="mc-tbl">
         <tbody>
@@ -3548,6 +3976,133 @@ function matchupCard(rid1, rid2, cs, pcs) {
         </tbody>
       </table>
     </div>
+  </div>`;
+}
+// ─── Path to win ──────────────────────────────────────────────────────────
+// A category matchup on Monday night is not "down by 11 points". It is "down two categories,
+// with a receiver and a kicker still to play" — and the question worth answering is exactly
+// what those two have to do. This module answers it, against the live totals:
+//
+//   1. Count the categories each side currently leads. Three wins takes the matchup, so the
+//      trailing team needs (3 − wins) more.
+//   2. For every category it isn't winning, work out the amount that takes the LEAD (the gap
+//      plus one — a level category wins nothing) and which of its remaining starters can move
+//      it: a QB moves passing, rushing and TDs; a RB/WR/TE rushing, receiving and TDs; a K
+//      kicking. A category with nobody left who can score in it is out of reach.
+//   3. Rank the reachable ones by how the amount compares with what those players are still
+//      projected for, and name the cheapest (3 − wins). Fewer reachable than needed, or nobody
+//      left at all, and the matchup is mathematically gone — the opponent's totals only rise.
+//
+// The callout also lists the categories the team leads that the opponent can still take back
+// (it has a starter left who scores in them), because winning two more is no use if a third
+// slips away. Everything reads from the live totals (calcCatStats) and the blended
+// projections' `left` lists (58-projections.js); nothing here fetches.
+
+const CATS_TO_WIN = 3;
+// Which BAFL categories a position can move.
+const POS_MOVES = {
+  QB: ['passing', 'rushing', 'tds'],
+  RB: ['rushing', 'receiving', 'tds'],
+  WR: ['rushing', 'receiving', 'tds'],
+  TE: ['rushing', 'receiving', 'tds'],
+  K:  ['kicking'],
+};
+function posMoves(pos, key) { return (POS_MOVES[String(pos || '').toUpperCase()] || []).includes(key); }
+
+// How the amount needed compares with what the remaining players are projected to add:
+// 'likely' within projection, 'stretch' up to double it, 'long' beyond that.
+function needTier(need, proj) {
+  const ratio = need / Math.max(proj, 0.5);
+  return ratio <= 1 ? 'likely' : ratio <= 2 ? 'stretch' : 'long';
+}
+
+// The plan for roster `rid` against `opp`, or null when there is nothing to say: no live
+// blend, nothing played yet on either side (every category is level at zero, so "trailing"
+// means nothing), or the team already holds three categories.
+function comebackPlan(cs, pcs, rid, opp) {
+  if (!pcs || !pcs.left || !pcs.tot) return null;
+  const started = r => (pcs.tot[r] || 0) > (pcs.rem[r] || 0);
+  if (!started(rid) && !started(opp)) return null;
+  const mine = pcs.left[rid] || [], theirs = pcs.left[opp] || [];
+  let wins = 0;
+  const losing = [], hold = [];
+  for (const c of BAFL_CATS) {
+    const a = cs[c.key][rid] || 0, b = cs[c.key][opp] || 0;
+    if (a > b) {
+      wins++;
+      const threats = theirs.filter(p => posMoves(p.pos, c.key));
+      if (threats.length) {
+        const oppProj = threats.reduce((s, p) => s + (p.cats[c.key] || 0), 0);
+        hold.push({ key: c.key, label: c.label, margin: a - b, oppProj, threats, atRisk: oppProj >= a - b });
+      }
+    } else {
+      const helpers = mine.filter(p => posMoves(p.pos, c.key));
+      const proj = helpers.reduce((s, p) => s + (p.cats[c.key] || 0), 0);
+      const need = (b - a) + 1;           // take the lead; level wins nothing
+      losing.push({ key: c.key, label: c.label, deficit: b - a, need, proj, helpers,
+        reachable: helpers.length > 0, tier: needTier(need, proj) });
+    }
+  }
+  const need = CATS_TO_WIN - wins;
+  if (need <= 0) return null;
+  const reachable = losing.filter(x => x.reachable)
+    .sort((x, y) => (x.need / Math.max(x.proj, 0.5)) - (y.need / Math.max(y.proj, 0.5)));
+  const out = !mine.length || reachable.length < need;
+  return { wins, need, out, left: mine, picks: out ? [] : reachable.slice(0, need), reachable, hold };
+}
+
+// Amount → "+38 yds" / "+2 TD" / "+4 pts", whole units (every category is integer-valued).
+function needAmount(key, n) {
+  const v = Math.ceil(n);
+  return key === 'tds' ? `+${v} TD${v === 1 ? '' : 's'}` : key === 'kicking' ? `+${v} pts` : `+${v} yds`;
+}
+function projAmount(key, n) {
+  const v = key === 'tds' ? (Math.round(n * 10) / 10) : Math.round(n);
+  return key === 'tds' ? `${v} TD` : key === 'kicking' ? `${v} pts` : `${v} yds`;
+}
+// "WR T. Hill, K H. Butker" — the players still to play, positions first.
+function leftList(players) {
+  return players.map(p => `${p.pos ? p.pos + ' ' : ''}${p.name || p.pid}`).join(', ');
+}
+
+function comebackHTML(plan, teamName) {
+  if (!plan) return '';
+  const n = esc(teamName);
+  const cats = k => `${k} ${k === 1 ? 'category' : 'categories'}`;
+  if (plan.out) {
+    const why = !plan.left.length
+      ? 'lineup is finished'
+      : plan.reachable.length
+        ? `only ${esc(plan.reachable.map(x => x.label).join(' and '))} still reachable with ${esc(leftList(plan.left))} left`
+        : `nobody left who can move the ${cats(plan.need)} it needs`;
+    return `<div class="mc-need mc-need-out">
+      <span class="mc-need-lbl">No path</span>
+      <span class="mc-need-txt"><b>${n}</b> can't get to ${CATS_TO_WIN} — needs ${cats(plan.need)} more, ${why}.</span>
+    </div>`;
+  }
+  const items = plan.picks.map(x => {
+    const who = leftList(x.helpers);
+    const tip = `${x.label}: trailing by ${Math.round(x.deficit)} — needs ${needAmount(x.key, x.need).slice(1)} to take it. `
+      + `${who} ${x.helpers.length === 1 ? 'is' : 'are'} projected for ${projAmount(x.key, x.proj)} more`
+      + `${x.tier === 'likely' ? ' — within projection' : x.tier === 'stretch' ? ' — a stretch' : ' — a long shot'}.`;
+    return `<span class="mc-need-item mc-need-${x.tier}" title="${escAttr(tip)}">
+      <span class="mc-need-cat">${esc(x.label)}</span><b>${needAmount(x.key, x.need)}</b>
+      <span class="mc-need-proj">proj ${projAmount(x.key, x.proj)}</span></span>`;
+  }).join('');
+  const holdTxt = plan.hold.length
+    ? `<div class="mc-need-hold">and hold ${plan.hold.map(h =>
+        `<span class="mc-need-holdcat${h.atRisk ? ' risk' : ''}" title="${escAttr(
+          `Leads ${h.label} by ${Math.round(h.margin)}; ${leftList(h.threats)} still to play for the other side, projected for ${projAmount(h.key, h.oppProj)} more.`)}">${esc(h.label)}</span>`).join(', ')}</div>`
+    : '';
+  const leftTip = `Still to play: ${leftList(plan.left)}`;
+  return `<div class="mc-need">
+    <div class="mc-need-head">
+      <span class="mc-need-lbl">Path to win</span>
+      <span class="mc-need-txt"><b>${n}</b> needs ${cats(plan.need)} more</span>
+      <span class="mc-need-left" title="${escAttr(leftTip)}">${plan.left.length} left</span>
+    </div>
+    <div class="mc-need-list">${items}</div>
+    ${holdTxt}
   </div>`;
 }
 // ─── Live matchup projections ─────────────────────────────────────────────
@@ -3579,24 +4134,56 @@ async function loadWeekProjections(season, week) {
   const hit = S.projCache[key];
   if (hit && Date.now() - hit.at < PROJ_TTL_MS) return hit;
   const rows = await fetchSoft(SLEEPER_WEEK_PROJ_URL(season, week), []);
-  const stats = {}, game = {}, team = {};
+  const stats = {}, game = {}, team = {}, who = {};
   for (const r of (rows || [])) {
     const pid = r.player_id || (r.player && r.player.player_id);
     if (!pid || !r.stats) continue;
     stats[String(pid)] = r.stats;
     if (r.game_id) game[String(pid)] = String(r.game_id);
     if (r.team)    team[String(pid)] = String(r.team);
+    // Position and a short name ride on every row, so the path-to-win callout can say "WR
+    // T. Hill still to play" without waiting on the 10MB player dictionary.
+    const pl = r.player || {};
+    const pos = String(pl.position || (r.stats && r.stats.pos) || '').toUpperCase();
+    const name = pl.last_name ? `${pl.first_name ? pl.first_name[0] + '. ' : ''}${pl.last_name}` : '';
+    if (pos || name) who[String(pid)] = { pos, name };
   }
   // A failed refresh keeps the copy we have rather than blanking the card.
   if (!Object.keys(stats).length && hit) return hit;
-  S.projCache[key] = { stats, game, team, at: Date.now() };
+  S.projCache[key] = { stats, game, team, who, at: Date.now() };
   return S.projCache[key];
+}
+
+// The NFL schedule for a season — every game with its status — cached briefly and shared by
+// the game-progress blend, the player card's upcoming-schedule rows and the defense-vs-
+// position ranks. Status changes during games, so the TTL is short; a failed refresh keeps
+// the copy in hand. `byTeam` is CODE → week → {opp, home, status, game_id, date}.
+const NFL_SCHED_TTL_MS = 60 * 1000;
+async function loadNflSchedule(season) {
+  const key = String(season);
+  const hit = S.nflSchedCache[key];
+  if (hit && Date.now() - hit.at < NFL_SCHED_TTL_MS) return hit;
+  const games = await fetchSoft(SLEEPER_SCHEDULE_URL(season), null);
+  if (!Array.isArray(games) || !games.length) return hit || null;
+  const byTeam = {};
+  for (const g of games) {
+    const wk = Number(g.week);
+    if (!wk || !g.home || !g.away) continue;
+    const status = String(g.status || '').toLowerCase();
+    (byTeam[g.home] = byTeam[g.home] || {})[wk] = { opp: g.away, home: true,  status, game_id: g.game_id, date: g.date };
+    (byTeam[g.away] = byTeam[g.away] || {})[wk] = { opp: g.home, home: false, status, game_id: g.game_id, date: g.date };
+  }
+  S.nflSchedCache[key] = { at: Date.now(), games, byTeam };
+  return S.nflSchedCache[key];
 }
 
 // Projections are only meaningful for a week that hasn't finished — for any past week the
 // actual result IS the answer, and showing a projection next to it is just noise.
+// That is the week in view and, before the Wednesday rollover, the one Sleeper has already
+// opened (S.maxWeek) — its Thursday-night forecast is the reason to tap › early.
 function projectionsApply() {
-  return isCurrentSeason() && S.selectedWeek === S.currentWeek && S.seasonStarted;
+  return isCurrentSeason() && S.seasonStarted
+      && S.selectedWeek >= S.currentWeek && S.selectedWeek <= S.maxWeek;
 }
 
 // Share of a game still to be played, from an ESPN scoreboard status block: 1 before kickoff,
@@ -3616,10 +4203,11 @@ function gameRemainingFromEspn(st) {
 // authority on "complete" (its stats are what the matchup is scored on); ESPN's clock refines
 // the games in between. Nothing here throws — a missing feed just means less precision.
 async function loadGameProgress(season, week) {
-  const [sched, board] = await Promise.all([
-    fetchSoft(SLEEPER_SCHEDULE_URL(season), null),
+  const [schedule, board] = await Promise.all([
+    loadNflSchedule(season),
     fetchSoft(ESPN_SCOREBOARD_URL(season, week), null),
   ]);
+  const sched = schedule && schedule.games;
   // ESPN, keyed by home team in Sleeper's spelling.
   const espn = {};
   for (const ev of (board && Array.isArray(board.events) ? board.events : [])) {
@@ -3681,25 +4269,39 @@ function projVariance(key, proj, rem) {
 
 // Blend live stats and projections into per-roster category totals in the same shape
 // calcCatStats returns — so the matchup card, score line and swing detection treat them
-// exactly like actuals — plus `var` (same shape, the unplayed variance) and `rem` (roster →
-// how many starter-games are still unplayed; 0 means that lineup is finished).
+// exactly like actuals — plus `var` (same shape, the unplayed variance), `rem` (roster →
+// how many starter-games are still unplayed; 0 means that lineup is finished), `tot`
+// (roster → starters in the lineup) and `left` (roster → the starters still to play, each
+// with his position, short name and the unplayed share of his projection per category —
+// what the path-to-win callout in 57-comeback.js reasons over).
 function blendProjections(matchups, stats, proj, prog) {
-  const out = { var: {}, rem: {} };
+  const out = { var: {}, rem: {}, tot: {}, left: {} };
+  const who = proj.who || {};
   for (const c of BAFL_CATS) { out[c.key] = {}; out.var[c.key] = {}; }
   for (const m of matchups) {
     const rid = m.roster_id;
-    out.rem[rid] = 0;
+    out.rem[rid] = 0; out.tot[rid] = 0; out.left[rid] = [];
     for (const c of BAFL_CATS) { out[c.key][rid] = 0; out.var[c.key][rid] = 0; }
     for (const pid of (m.starters || [])) {
       if (!pid || pid === '0') continue;                 // empty lineup slot
+      out.tot[rid]++;
       const act  = baflPlayerCats(stats[pid]);
       const prow = proj.stats[pid];
       const pc   = baflPlayerCats(prow);
       const r    = prow ? gameRemaining(prog, proj.game[pid], proj.team[pid]) : 0;
       out.rem[rid] += r;
+      const todo = {};
       for (const c of BAFL_CATS) {
         out[c.key][rid]     += act[c.key] + r * pc[c.key];
         out.var[c.key][rid] += projVariance(c.key, pc[c.key], r);
+        todo[c.key] = r * pc[c.key];
+      }
+      if (r > 0) {
+        const w = who[pid] || {};
+        const rec = (!w.pos && typeof playerRec === 'function') ? playerRec(pid) : null;
+        out.left[rid].push({ pid, rem: r, cats: todo,
+          pos: String(w.pos || (rec && rec.pos) || '').toUpperCase(),
+          name: w.name || (rec && rec.name) || '' });
       }
     }
   }

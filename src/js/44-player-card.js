@@ -380,9 +380,16 @@ async function pcSelectSeason(season, opts) {
   const body = document.getElementById('pcBody');
   if (body) body.innerHTML = `<div class="pc-loading">Loading ${esc(season)} game log…</div>`;
 
-  let weekly;
+  // The live season also carries the games still to come, from the NFL schedule, so the
+  // card shows the whole slate — and the defense-vs-position colours can be laid over it.
+  const live = String(await currentNflSeason()) === String(PC.season) && !!PC.team;
+  if (tok !== pcToken || !PC) return;
+  let weekly, sched = null;
   try {
-    weekly = await fetchPlayerWeekly(pid, PC.season);
+    [weekly, sched] = await Promise.all([
+      fetchPlayerWeekly(pid, PC.season),
+      live ? loadNflSchedule(PC.season) : null,
+    ]);
   } catch {
     if (tok !== pcToken || !PC) return;
     PC.seasonState[PC.season] = 'unknown';
@@ -393,6 +400,7 @@ async function pcSelectSeason(season, opts) {
   if (tok !== pcToken || !PC || PC.pid !== pid) return;
 
   const rows = pcSeasonRows(weekly);
+  if (live && sched) pcFillSchedule(rows, sched, PC.team);
   if (!rows.length) {
     PC.seasonState[PC.season] = 'empty';
     // Walk to the next-newest candidate with data, but bound the search — a genuinely
@@ -409,10 +417,63 @@ async function pcSelectSeason(season, opts) {
   PC.seasonState[PC.season] = 'ok';
   renderPcSeasonTabs();
   if (body) {
-    body.innerHTML = renderPcSeason(PC.season, rows, PC.pos) +
+    body.innerHTML = renderPcSeason(PC.season, rows, PC.pos, { live }) +
       `<div class="pc-src">Per-game stats via Sleeper · category values use BAFL scoring.</div>`;
     applyConsistencyBadge(PC.season, rows, PC.pos);
+    if (live) applyDvpColors(PC.season, PC.pos);
     pcEnableStickyStatHeaders();
+  }
+}
+
+// Fill the live season's missing weeks from the NFL schedule, in place: a game still to be
+// played becomes an upcoming row (opponent shown, stats blank); a finished game the player
+// has no row for is a DNP; a week with no game is a bye. Weeks the feed already covers are
+// left alone. Nothing here counts toward totals or the consistency grade — those only ever
+// read games actually played.
+function pcFillSchedule(rows, sched, team) {
+  const byWeek = sched && sched.byTeam && sched.byTeam[String(team || '').toUpperCase()];
+  if (!byWeek) return rows;
+  const have = new Set(rows.map(r => r.wk));
+  const empty = baflPlayerCats({});
+  for (let wk = 1; wk <= 18; wk++) {
+    if (have.has(wk)) continue;
+    const g = byWeek[wk];
+    if (!g) { rows.push({ wk, opp: null, isAway: false, gp: 0, team, stats: {}, cats: empty, bye: true, dnp: false, future: false }); continue; }
+    const done = g.status === 'complete';
+    rows.push({ wk, opp: g.opp, isAway: !g.home, gp: 0, team, stats: {}, cats: empty,
+      bye: false, dnp: done, future: !done });
+  }
+  rows.sort((a, b) => a.wk - b.wk);
+  return rows;
+}
+
+// Lay the defense-vs-position tiers over every opponent code in the body once the ranks
+// arrive (49-dvp.js). Patches in place — the table rendered without waiting for this.
+async function applyDvpColors(season, pos) {
+  const P = String(pos || '').toUpperCase();
+  if (!BAFL_POSITIONS.includes(P)) return;
+  const dvp = await loadDvp(season);
+  if (!dvp || !PC || String(PC.season) !== String(season) || PC.mode !== 'nfl') return;
+  const body = document.getElementById('pcBody');
+  if (!body) return;
+  const n = dvp.n[P] || 0;
+  const what = P === 'K' ? 'kicking points' : 'yards + TDs';
+  body.querySelectorAll('.pc-opp-code[data-opp]').forEach(el => {
+    const def = el.dataset.opp;
+    const rank = dvp.ranks[def] && dvp.ranks[def][P];
+    const tier = dvpTier(rank, n);
+    if (!tier) return;
+    el.classList.add('pc-dvp', `pc-dvp-${tier}`);
+    const pg = dvp.perGame[def][P];
+    el.title = `${def} allows the ${ordinal(rank)}-most ${what} to ${P}s of ${n} defenses `
+      + `(${Math.round(pg * 10) / 10} per game${dvp.prior ? ', blended with last season this early in the year' : ''}) — `
+      + (tier === 'easy' ? 'a matchup to attack' : tier === 'hard' ? 'a tough draw' : 'middle of the pack');
+  });
+  const slot = body.querySelector('.pc-dvp-slot');
+  if (slot) {
+    slot.innerHTML = `<span class="pc-dvp-key pc-dvp-easy">soft</span><span class="pc-dvp-key pc-dvp-mid">average</span>`
+      + `<span class="pc-dvp-key pc-dvp-hard">tough</span> matchups for ${P}s — by ${what} each defense allows per game`
+      + `${dvp.prior ? ', last season filling in until six games are played' : ` over ${dvp.weeks} week${dvp.weeks === 1 ? '' : 's'}`}.`;
   }
 }
 
@@ -495,7 +556,10 @@ function pcDerived(key, s) {
 }
 
 // ─── Season table ─────────────────────────────────────────────────────────
-function renderPcSeason(season, rows, pos) {
+// `opts.live` marks the season in progress: its rows include the games still to come, and
+// a legend slot for the defense-vs-position colours is rendered under the table.
+function renderPcSeason(season, rows, pos, opts) {
+  opts = opts || {};
   const P = String(pos || '').toUpperCase();
   const cats = pcCatsForPos(P);
   const box = PC_BOX_SCHEMA[P];
@@ -528,10 +592,15 @@ function renderPcSeason(season, rows, pos) {
   const bodyRows = rows.map(r => {
     const nCells = catCols.length + (showTotal ? 1 : 0) + (gap ? 1 : 0) +
       (box ? box.cols.length + (box.groups.length - 1) : 0);
-    if (r.bye || r.dnp) {
-      const label = r.bye ? 'BYE' : 'DNP';
-      return `<tr class="pc-row-${r.bye ? 'bye' : 'dnp'}"><td class="pc-wk">${r.wk}</td>` +
-        `<td class="pc-opp">${label}</td><td class="pc-cell bye" colspan="${nCells}">–</td></tr>`;
+    // A missed or upcoming game keeps its opponent — it is still a real matchup on a real
+    // schedule, and the defense-vs-position colour belongs on it. Only a true bye says BYE.
+    if (r.bye || r.dnp || r.future) {
+      const kind = r.bye ? 'bye' : r.dnp ? 'dnp' : 'future';
+      const oppCell = r.opp ? pcOppInner(r) : (r.bye ? 'BYE' : '–');
+      const title = r.bye ? 'Bye week' : r.dnp ? 'Did not play — not counted in totals or the consistency grade' : 'Upcoming game';
+      return `<tr class="pc-row-${kind}"><td class="pc-wk">${r.wk}</td>` +
+        `<td class="pc-opp ${r.opp ? (r.isAway ? 'away' : 'home') : ''}" title="${title}">${oppCell}</td>` +
+        `<td class="pc-cell bye" colspan="${nCells}">${r.dnp ? 'DNP' : '–'}</td></tr>`;
     }
     let cells = catCols.map(c => {
       const v = r.cats[c.key] || 0;
@@ -551,10 +620,7 @@ function renderPcSeason(season, rows, pos) {
         return sep + `<td class="pc-cell ${c.color ? c.color(v) : ''}">${display}</td>`;
       }).join('');
     }
-    const oppTxt = r.opp
-      ? `<span class="pc-opp-inner">${r.isAway ? '<span class="pc-at">@</span>' : '<span class="pc-vs">vs</span>'}` +
-        `<img src="${NFL_LOGO(r.opp)}" class="pc-opp-logo" onerror="this.style.display='none'"><span>${esc(r.opp)}</span></span>`
-      : '–';
+    const oppTxt = r.opp ? pcOppInner(r) : '–';
     const started = pcStartedFlag(season, r.wk);
     return `<tr><td class="pc-wk">${r.wk}${started}</td>` +
       `<td class="pc-opp ${r.isAway ? 'away' : 'home'}">${oppTxt}</td>${cells}</tr>`;
@@ -562,6 +628,7 @@ function renderPcSeason(season, rows, pos) {
 
   const totalsRow = pcTotalsRow(rows, P, catCols, showTotal, totalBench, box);
   const teamTag = pcSeasonTeamTag(rows);
+  const dvpSlot = (opts.live && BAFL_POSITIONS.includes(P)) ? `<div class="pc-dvp-slot"></div>` : '';
   return `<div class="pc-season">
     <div class="pc-season-title">${esc(season)}${teamTag}${pcSeasonBadges(rows, P, season)}</div>
     <div class="pc-table-scroll"><table class="pc-table">
@@ -571,7 +638,16 @@ function renderPcSeason(season, rows, pos) {
       </thead>
       <tbody>${bodyRows}${totalsRow}</tbody>
     </table></div>
+    ${dvpSlot}
   </div>`;
+}
+
+// "@ PHI" / "vs PHI" with the club logo. The code carries data-opp so the defense-vs-
+// position pass can find and tint it.
+function pcOppInner(r) {
+  return `<span class="pc-opp-inner">${r.isAway ? '<span class="pc-at">@</span>' : '<span class="pc-vs">vs</span>'}` +
+    `<img src="${NFL_LOGO(r.opp)}" class="pc-opp-logo" onerror="this.style.display='none'">` +
+    `<span class="pc-opp-code" data-opp="${escAttr(r.opp)}">${esc(r.opp)}</span></span>`;
 }
 
 // Season totals: category values sum, counting stats sum, "long" columns take the max, and

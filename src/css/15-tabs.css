@@ -8,5 +8,6 @@
 .tab.active{color:var(--accent);border-bottom-color:var(--accent);}
 
 /* ── Content ── */
-.page{max-width:1240px;margin:0 auto;padding:22px 18px 60px;}
+/* Bottom padding clears the TripleCrown crown pinned in the corner (92-tc-link.css). */
+.page{max-width:1240px;margin:0 auto;padding:22px 18px 76px;}
 

@@ -10,3 +10,38 @@
   background:rgba(210,153,34,.12);border:1px solid rgba(210,153,34,.28);
   border-radius:5px;padding:1px 7px;margin-left:auto;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;max-width:100%;}
+
+/* ── Path to win ──
+   What the trailing side has to do, category by category, while the week is live. Each
+   chip is one category to take: the amount that takes the lead, tinted by how it compares
+   with what the remaining starters are projected for. */
+.mc-need{padding:7px 12px 8px;background:rgba(210,153,34,.06);border-bottom:1px solid rgba(210,153,34,.22);
+  display:flex;flex-direction:column;gap:5px;}
+.mc-need-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;}
+.mc-need-lbl{font-size:8.5px;font-weight:900;letter-spacing:1px;color:var(--warn);
+  text-transform:uppercase;flex:none;}
+.mc-need-txt{font-size:11.5px;color:var(--text);min-width:0;}
+.mc-need-txt b{font-weight:800;}
+.mc-need-left{font-size:9.5px;font-weight:800;color:var(--muted);margin-left:auto;flex:none;
+  border:1px dotted var(--border2);border-radius:4px;padding:1px 6px;cursor:help;}
+.mc-need-list{display:flex;flex-wrap:wrap;gap:5px;}
+.mc-need-item{display:inline-flex;align-items:baseline;gap:5px;font-size:11px;font-weight:700;
+  border:1px solid var(--border);border-radius:6px;padding:3px 8px;background:var(--surface2);
+  color:var(--text);cursor:help;white-space:nowrap;}
+.mc-need-item b{font-family:var(--mono);font-size:12px;font-weight:800;}
+.mc-need-cat{color:var(--muted);font-weight:700;}
+.mc-need-proj{font-size:9.5px;font-weight:600;color:var(--muted);}
+.mc-need-likely{border-color:rgba(63,185,80,.45);background:rgba(63,185,80,.1);}
+.mc-need-likely b{color:#8ff0a6;}
+.mc-need-stretch{border-color:rgba(210,153,34,.45);background:rgba(210,153,34,.1);}
+.mc-need-stretch b{color:#ffd98a;}
+.mc-need-long{border-color:rgba(248,81,73,.4);background:rgba(248,81,73,.08);}
+.mc-need-long b{color:#ffa9a4;}
+.mc-need-hold{font-size:10.5px;color:var(--muted);}
+.mc-need-holdcat{font-weight:800;color:var(--text);cursor:help;border-bottom:1px dotted var(--border2);}
+.mc-need-holdcat.risk{color:#ffd98a;}
+.mc-need-out{flex-direction:row;align-items:baseline;gap:8px;flex-wrap:wrap;
+  background:rgba(248,81,73,.06);border-bottom-color:rgba(248,81,73,.25);}
+.mc-need-out .mc-need-lbl{color:var(--danger);}
+.mc-need-out .mc-need-txt{color:var(--muted);}
+.mc-need-out .mc-need-txt b{color:var(--text);}

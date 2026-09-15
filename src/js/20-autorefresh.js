@@ -1,9 +1,10 @@
 // ─── Auto-refresh ─────────────────────────────────────────────────────────
-// Active only when: current season, current week, matchups tab, page visible.
+// Active only when: current season, a live week (the one in view or the one Sleeper has
+// opened ahead of the Wednesday rollover), matchups tab, page visible.
 function shouldAutoRefresh() {
   return S.arEnabled
       && isCurrentSeason()
-      && S.selectedWeek === S.currentWeek
+      && S.selectedWeek >= S.currentWeek && S.selectedWeek <= S.maxWeek
       && S.activeTab === 'matchups'
       && !document.hidden;
 }

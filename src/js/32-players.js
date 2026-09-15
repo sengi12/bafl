@@ -130,9 +130,21 @@ function ownerOf(pid) {
 // years_exp is wrong or missing often enough that the card also treats an empty stats response
 // as "no games that year" and greys the tab out. Deriving the list up front means the tabs
 // render instantly; verifying lazily means a bad years_exp self-corrects on first click.
+// Sleeper's NFL state — season, week, and the season's start date (which the week clock in
+// 12-week-clock.js runs on). Fetched once per session and shared by everything that asks.
+async function loadNflState() {
+  if (S.nflState) return S.nflState;
+  if (!S.nflStatePromise) {
+    S.nflStatePromise = fetchSoft(SLEEPER_STATE_URL).then(st => {
+      S.nflState = (st && typeof st === 'object') ? st : {};
+      return S.nflState;
+    });
+  }
+  return S.nflStatePromise;
+}
 async function currentNflSeason() {
   if (S.nflSeason) return S.nflSeason;
-  const st = await fetchSoft(SLEEPER_STATE_URL);
+  const st = await loadNflState();
   const yr = st && (st.season || st.league_season);
   // Fall back to the league we're viewing rather than the wall clock — in January the calendar
   // year has already rolled over but the NFL season being played has not.

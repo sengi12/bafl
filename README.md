@@ -28,6 +28,14 @@ Ties on categories are broken by **total yards**. That scoring lives in exactly 
   Thursday and *is* the box score by Monday night. Game state comes from Sleeper's schedule
   (per game) and ESPN's scoreboard (period and clock). Live results always render first;
   projections patch in when they arrive.
+- **Path to win** — while a week is live, the side that's behind gets a line under the projected
+  score saying exactly what it needs: the categories it has to take (the cheapest ones that get it
+  to three), the amount that takes the *lead* in each (a level category wins nothing), who it has
+  left to do it with, and how that compares with what those players are still projected for —
+  green within projection, amber a stretch, red a long shot. It also names the categories it
+  leads that the other side can still take back. When the remaining starters can't reach enough
+  categories — a lone kicker down two — it says so instead. The logic lives in
+  [src/js/57-comeback.js](src/js/57-comeback.js).
 - **Win probability** — a bar under the team names, filled left-to-right by the first team's
   chance of taking the matchup. Each category is a normal draw around its blended projection
   whose spread shrinks as games finish; the five are combined exactly (with a level count falling
@@ -44,7 +52,16 @@ Ties on categories are broken by **total yards**. That scoring lives in exactly 
 - **Player cards** — click any player anywhere. Who he is, where he was drafted, who rosters
   him in BAFL, and his game log season by season — with his BAFL category contribution graded
   green/yellow/red per game, plus the raw box score and a consistency grade. A College tab
-  pulls his college game logs from ESPN.
+  pulls his college game logs from ESPN. The current season shows the **whole slate**, games to
+  come included, with every opponent coloured Sleeper-style by how generous that defense has been
+  to his position — see [Defense vs position](#defense-vs-position).
+- **TripleCrown** — the crown in the bottom-right corner opens BAFL's sibling projections app.
+- **Week rollover** — Sleeper moves a league to the next week on Tuesday, hours after Monday
+  Night Football. BAFL doesn't: the finished week stays in view until **Wednesday at 6am
+  Eastern**, and the week Sleeper has already opened is one tap away on `›`, tagged *next*.
+  The rule is in [src/js/12-week-clock.js](src/js/12-week-clock.js): NFL week *N* begins
+  7·(N−1) days after the season's start date (which Sleeper publishes, and which is always the
+  Wednesday before the opener) at `WEEK_ROLLOVER_HOUR_ET`.
 - **Player search** — search any NFL player and see who rosters him, or "FA".
 - **Past seasons** — the season picker walks Sleeper's `previous_league_id` chain, so every
   prior BAFL season is browsable with the same views.
@@ -88,6 +105,32 @@ Adjust `CONSISTENCY_CURVE` to move it; nothing else reads those numbers.
 > from the same anchors; they stay fixed constants (in `PC_CATS_BY_POS`) so the table colours in
 > immediately rather than shifting once a benchmark loads.
 
+## Defense vs position
+
+The player card's opponent colours answer "is this a matchup to attack?" for *this* player's
+position. Green is a defense that gives up a lot to the position, red one that shuts it down,
+amber the middle; hover a code for the rank and the per-game figure.
+
+1. For every completed week, pull Sleeper's stat rows for the five rostered positions. Each row
+   carries the **opponent**, so no schedule-joining or team-of-record guessing is needed. A week
+   still in progress only contributes games that are over.
+2. Reduce each line to the production BAFL cares about — category yards plus 20 per touchdown
+   (a score is worth roughly that against the yardage categories), or kicking points for kickers —
+   and sum it per defense, per position.
+3. Divide by the games that defense has actually played (from the schedule, so a positional
+   shutout counts as a game, not a missing week), and rank: rank 1 allows the most. The top ~30%
+   are green, the bottom ~30% red.
+
+"The season as a whole" is thin in September, so until a defense has played six games last
+season's per-game figure stands in for the games it hasn't yet — a defense two games in is judged
+on those two plus four games' worth of last year's average. The blend fades out by October, and
+the legend under the table says when it's in effect.
+
+Cost: one ~90KB request per completed week, once. Each week's aggregate is a few hundred bytes
+and never changes, so it's persisted in Cache Storage — a device downloads the season once, not
+once per card. The table renders immediately; the colours patch in when the ranks land. Code in
+[src/js/49-dvp.js](src/js/49-dvp.js).
+
 ## No seed file
 
 Everything is fetched live from public, CORS-open, read-only APIs. There is no pre-baked data
@@ -97,7 +140,7 @@ file to build or keep fresh.
 |---|---|
 | `api.sleeper.app/v1` | league, users, rosters, matchups, player database |
 | `api.sleeper.app/schedule` | game status per game (pre-game / in progress / complete) |
-| `api.sleeper.com` | per-player weekly stats, weekly projections |
+| `api.sleeper.com` | per-player weekly stats, weekly projections, league-wide weekly stat rows (defense vs position) |
 | `site.api.espn.com` | college + fallback NFL game logs; the week's scoreboard (period + clock) |
 | `sports.core.api.espn.com` | draft position |
 | `site.web.api.espn.com` | athlete-id lookup |
@@ -122,8 +165,10 @@ src/js/*.js               app JS, split by feature  (concatenated in filename or
 ```bash
 python3 build.py            # rebuild index.html from src/
 python3 build.py --check    # verify src/ still rebuilds index.html; exit 1 if not
-node tests/test_projections.js   # blended projections + win probability, run against the real partials
+node tests/test_projections.js   # blended projections, win probability, path to win — run against the real partials
 node tests/test_standings.js     # sortable standings: order, tie-breaks, header state
+node tests/test_week_clock.js    # the Wednesday-morning week rollover
+node tests/test_dvp.js           # defense vs position: aggregation, ranking, early-season blend
 ```
 
 The numeric filename prefixes fix concatenation order. This is concatenation, not module

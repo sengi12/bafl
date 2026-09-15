@@ -13,7 +13,6 @@ async function init() {
     // and player leaders, and after the first visit it comes straight out of Cache Storage —
     // starting it here means those views are usually instant instead of waiting on a download.
     loadPlayers().catch(() => { /* surfaced when a view that needs it is opened */ });
-    currentNflSeason();
     await loadSeason(0);
   } catch(e) {
     setError('Failed to load league: ' + e.message);
@@ -45,7 +44,12 @@ async function loadSeason(idx) {
   // or 'complete' all mean the schedule exists. Pre-draft / drafting = not started.
   const status = (league.status || '').toLowerCase();
   S.seasonStarted = !['pre_draft', 'drafting', ''].includes(status) && leg > 0;
-  S.currentWeek   = S.seasonStarted ? Math.max(1, leg) : 1;
+  // `leg` is the week Sleeper has opened. The week the app OPENS ON lags it until Wednesday
+  // morning (12-week-clock.js), so Monday night's result is still the first thing you see on
+  // Tuesday. Only the live season has a clock to consult; past seasons open on their last week.
+  S.maxWeek       = S.seasonStarted ? Math.max(1, leg) : 1;
+  const state     = isCurrentSeason() ? await loadNflState() : null;
+  S.currentWeek   = S.seasonStarted ? heldWeek(leg, state, league.season) : 1;
   S.selectedWeek  = S.currentWeek;
 
   document.getElementById('seasonSel').value    = String(idx);

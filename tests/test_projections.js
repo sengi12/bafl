@@ -5,7 +5,7 @@
 const fs = require('fs'), path = require('path'), vm = require('vm'), assert = require('assert');
 
 const ROOT = path.join(__dirname, '..');
-const PARTIALS = ['00-config.js', '05-helpers.js', '50-stats.js', '58-projections.js', '59-winprob.js', '55-matchup-card.js'];
+const PARTIALS = ['00-config.js', '05-helpers.js', '50-stats.js', '58-projections.js', '59-winprob.js', '57-comeback.js', '55-matchup-card.js'];
 const ctx = vm.createContext({
   console, Math, Date, Map, Set, Number, String, Object, Array, Promise, JSON, Error,
   document: { getElementById: () => ({ textContent: '', style: {}, classList: { add() {}, remove() {}, toggle() {} } }), addEventListener() {} },
@@ -20,6 +20,7 @@ const blendProjections = g('blendProjections'), winProbability = g('winProbabili
 const decidedWinProb = g('decidedWinProb'), calcResult = g('calcResult'), calcCatStats = g('calcCatStats');
 const gameRemainingFromEspn = g('gameRemainingFromEspn'), gameRemaining = g('gameRemaining');
 const loadGameProgress = g('loadGameProgress'), matchupCard = g('matchupCard'), normCdf = g('normCdf');
+const loadNflSchedule = g('loadNflSchedule'), comebackPlan = g('comebackPlan'), comebackHTML = g('comebackHTML');
 
 // Tests run in order, and one that returns a promise is awaited before the next starts.
 const queue = [];
@@ -136,12 +137,34 @@ test('loadGameProgress merges Sleeper status with the ESPN clock and maps WSH→
     assert.strictEqual(p.weekDone, false);
   });
 });
-test('loadGameProgress survives both feeds failing', async () => {
+test('loadGameProgress keeps the last good schedule when the feed fails mid-week', async () => {
+  ctx.fetch = async () => { throw new Error('down'); };
+  return loadGameProgress(2026, 1).then(p => {
+    assert.strictEqual(p.rem['2'], 0, 'cached schedule still knows the finished game');
+    assert.strictEqual(p.rem['1'], 1, 'no ESPN clock this time — pre_game reads as unplayed');
+  });
+});
+test('loadGameProgress survives both feeds failing with nothing cached', async () => {
+  S.nflSchedCache = {};
   ctx.fetch = async () => { throw new Error('down'); };
   return loadGameProgress(2026, 1).then(p => {
     assert.strictEqual(Object.keys(p.rem).length, 0); assert.strictEqual(p.weekDone, false);
     assert.strictEqual(gameRemaining(p, 'A', 'KC'), 1, 'no state → full projection, as before');
   });
+});
+test('loadNflSchedule indexes both sides of every game by team and week', async () => {
+  S.nflSchedCache = {};
+  ctx.fetch = async () => ({ ok: true, json: async () => [
+    { week: 1, game_id: '1', home: 'PHI', away: 'WAS', status: 'complete', date: '2026-09-10' },
+    { week: 3, game_id: '9', home: 'PHI', away: 'KC',  status: 'pre_game', date: '2026-09-27' },
+  ] });
+  const s = await loadNflSchedule(2026);
+  assert.strictEqual(s.byTeam.PHI[1].opp, 'WAS'); assert.strictEqual(s.byTeam.PHI[1].home, true);
+  assert.strictEqual(s.byTeam.WAS[1].opp, 'PHI'); assert.strictEqual(s.byTeam.WAS[1].home, false);
+  assert.strictEqual(s.byTeam.PHI[3].status, 'pre_game'); assert.strictEqual(s.byTeam.PHI[2], undefined);
+  const again = await loadNflSchedule(2026);
+  assert.strictEqual(again, s, 'served from cache within the TTL');
+  S.nflSchedCache = {};
 });
 
 section('winProbability');
@@ -224,6 +247,118 @@ test('past week: decided bar from the result, no projections requested', () => {
   assert.ok(html.includes('mc-wp decided'), 'past weeks are decided');
   assert.ok(!html.includes('mc-proj'));
   S.currentWeek = 1;
+});
+
+// Arrays built inside the vm have their own prototype, which deepStrictEqual rejects.
+const same = (a, b, msg) => assert.strictEqual(JSON.stringify(a), JSON.stringify(b), msg);
+section('blendProjections: who is left');
+test('left lists the unfinished starters with position, name and unplayed projection', () => {
+  const pj = { ...proj, who: { q1: { pos: 'QB', name: 'P. Mahomes' }, r1: { pos: 'RB', name: 'J. Jacobs' }, k1: { pos: 'K', name: 'H. Butker' },
+    q2: { pos: 'QB', name: 'J. Allen' }, w2: { pos: 'WR', name: 'A. Brown' }, k2: { pos: 'K', name: 'T. Bass' } } };
+  const pcs = blendProjections(matchups, {}, pj, prog(0, 0.5, 1));
+  assert.strictEqual(pcs.tot[1], 3, 'empty slot not counted'); assert.strictEqual(pcs.tot[2], 3);
+  same(pcs.left[1].map(p => p.pid), ['r1'], 'game A is over, only the RB is left');
+  assert.strictEqual(pcs.left[1][0].pos, 'RB'); assert.strictEqual(pcs.left[1][0].name, 'J. Jacobs');
+  near(pcs.left[1][0].cats.rushing, 37.5, 1e-9, 'half of his 75-yard projection is still to come');
+  same(pcs.left[2].map(p => p.pid).sort(), ['k2', 'q2', 'w2']);
+});
+
+section('comebackPlan');
+// Team 1 leads passing and kicking, trails rushing / receiving / TDs; only its RB is left.
+const who = { q1: { pos: 'QB', name: 'P. Mahomes' }, r1: { pos: 'RB', name: 'J. Jacobs' }, k1: { pos: 'K', name: 'H. Butker' },
+  q2: { pos: 'QB', name: 'J. Allen' }, w2: { pos: 'WR', name: 'A. Brown' }, k2: { pos: 'K', name: 'T. Bass' } };
+const cbStats = {
+  q1: { pass_yd: 280, pass_td: 1 }, k1: { xpm: 3, fgm: 2 },
+  q2: { pass_yd: 200, pass_td: 1, rush_yd: 40, rush_td: 1 }, w2: { rec_yd: 30 }, k2: { xpm: 1, fgm: 1 },
+};
+const cbMatchups = [
+  { roster_id: 1, matchup_id: 1, starters: ['q1', 'r1', 'k1'] },
+  { roster_id: 2, matchup_id: 1, starters: ['q2', 'w2', 'k2'] },
+];
+test('names the cheapest categories that get the trailing side to three', () => {
+  // Games A (q1,k1) and C (q2,k2) are over; game B (r1, w2) is at halftime.
+  const pcs = blendProjections(cbMatchups, cbStats, { ...proj, who }, prog(0, 0.5, 0));
+  const cs = calcCatStats(cbMatchups.map(m => ({ ...m, players_points: Object.fromEntries(m.starters.map(p => [p, 1])) })), cbStats);
+  const plan = comebackPlan(cs, pcs, 1, 2);
+  assert.ok(plan && !plan.out, 'a path exists');
+  assert.strictEqual(plan.wins, 2); assert.strictEqual(plan.need, 1);
+  assert.strictEqual(plan.left.length, 1); assert.strictEqual(plan.left[0].name, 'J. Jacobs');
+  // Trails rushing 0–40 (needs 41, RB projected 37.5 more → stretch), receiving 0–30 (needs 31,
+  // projected 10 → long), TDs 1–2 (needs 2, projected 0.3 → long). Rushing is the cheapest.
+  assert.strictEqual(plan.picks.length, 1);
+  assert.strictEqual(plan.picks[0].key, 'rushing'); assert.strictEqual(plan.picks[0].need, 41);
+  assert.strictEqual(plan.picks[0].tier, 'stretch');
+  assert.strictEqual(plan.reachable.length, 3, 'a RB can move rushing, receiving and TDs');
+  // Passing and kicking are led, but only kicking has nobody left on the other side.
+  same(plan.hold.map(h => h.key), [], 'q2 and k2 are finished — nothing to hold against');
+  const html = comebackHTML(plan, 'Alpha');
+  assert.ok(html.includes('Path to win') && html.includes('needs 1 category more') && html.includes('+41 yds'));
+});
+test('the leading side gets no plan, and nothing renders before kickoff', () => {
+  const pcs = blendProjections(cbMatchups, cbStats, { ...proj, who }, prog(0, 0.5, 0));
+  const cs = calcCatStats(cbMatchups.map(m => ({ ...m, players_points: Object.fromEntries(m.starters.map(p => [p, 1])) })), cbStats);
+  assert.strictEqual(comebackPlan(cs, pcs, 2, 1), null, 'team 2 already holds three');
+  const pre = blendProjections(cbMatchups, {}, { ...proj, who }, prog(1, 1, 1));
+  const zero = calcCatStats(cbMatchups.map(m => ({ ...m, players_points: {} })), {});
+  assert.strictEqual(comebackPlan(zero, pre, 1, 2), null, 'nothing played yet');
+  assert.strictEqual(comebackHTML(null, 'x'), '');
+});
+test('flags the categories a team leads that the other side can still take', () => {
+  // Team 2's WR is still playing: he threatens receiving and TDs, never passing or kicking.
+  const stats = { q1: { pass_yd: 280, pass_td: 2, rush_yd: 50 }, r1: { rush_yd: 90, rec_yd: 40 }, k1: { xpm: 3, fgm: 2 },
+    q2: { pass_yd: 200 }, w2: { rec_yd: 30 }, k2: { xpm: 1, fgm: 1 } };
+  const pcs = blendProjections(cbMatchups, stats, { ...proj, who }, prog(0, 0.5, 0));
+  const cs = calcCatStats(cbMatchups.map(m => ({ ...m, players_points: Object.fromEntries(m.starters.map(p => [p, 1])) })), stats);
+  // Team 1 leads everything; team 2 trails all five with one WR left (projected 35 rec / 0.25 TD).
+  // A receiver can, in principle, move rushing, receiving and TDs — so three are reachable and
+  // the plan says exactly how far-fetched each is rather than calling it over.
+  const plan = comebackPlan(cs, pcs, 2, 1);
+  assert.ok(plan && !plan.out, 'three categories are still technically reachable');
+  assert.strictEqual(plan.need, 3);
+  same(plan.picks.map(x => x.key), ['receiving', 'tds', 'rushing'], 'cheapest first — 3 TDs on 0.25 projected beats 91 yards on nothing');
+  same(plan.picks.map(x => x.tier), ['likely', 'long', 'long']);
+  assert.strictEqual(plan.picks[2].need, 141, 'rushing: trailing 0–140 (QB 50 + RB 90), needs 141');
+  assert.strictEqual(comebackPlan(cs, pcs, 1, 2), null, 'the leader needs nothing');
+  // Now level the score so team 1 also gets a plan: its receiving and TD leads are exposed to
+  // the WR still playing, passing and kicking are not.
+  const level = calcCatStats(cbMatchups.map(m => ({ ...m, players_points: Object.fromEntries(m.starters.map(p => [p, 1])) })),
+    { ...stats, q1: { pass_yd: 280, rush_yd: 50 }, q2: { pass_yd: 300 }, k2: { xpm: 10 } });   // team 2 leads passing and kicking; TDs level at 0
+  const p1 = comebackPlan(level, pcs, 1, 2);
+  assert.strictEqual(p1.wins, 2, 'rushing and receiving led; passing and kicking lost; TDs level');
+  same(p1.hold.map(h => h.key), ['receiving', 'rushing'], 'both exposed to the WR still playing (category order)');
+  assert.ok(p1.hold.every(h => h.threats.length === 1 && h.threats[0].pos === 'WR'));
+  assert.strictEqual(p1.hold[0].atRisk, true, 'a 10-yard receiving lead is within his projection');
+  assert.strictEqual(p1.hold[1].atRisk, false, 'a 140-yard rushing lead is not');
+  assert.ok(comebackHTML(p1, 'Alpha').includes('and hold'));
+});
+test('a lone kicker cannot take two categories — that is a genuine elimination', () => {
+  // Team 1 starts only a RB and a K; the RB's game (B) and everything of team 2's is over,
+  // and the kicker's game (A) hasn't kicked off.
+  const ms = [{ roster_id: 1, matchup_id: 1, starters: ['r1', 'k1'] }, cbMatchups[1]];
+  const stats = { r1: { rush_yd: 20 }, q2: { pass_yd: 250, pass_td: 2 }, w2: { rec_yd: 80 }, k2: { xpm: 2 } };
+  const pcs = blendProjections(ms, stats, { ...proj, who }, prog(1, 0, 0));
+  const cs = calcCatStats(ms.map(m => ({ ...m, players_points: Object.fromEntries(m.starters.map(p => [p, 1])) })), stats);
+  const plan = comebackPlan(cs, pcs, 1, 2);
+  assert.ok(plan.out); assert.strictEqual(plan.need, 2, 'rushing is led; two more needed');
+  same(plan.reachable.map(x => x.key), ['kicking']);
+  const html = comebackHTML(plan, 'Alpha');
+  assert.ok(html.includes('No path') && html.includes('only Kicking still reachable') && html.includes('K H. Butker'));
+});
+test('a finished lineup that is behind is out, however close', () => {
+  const pcs = blendProjections(cbMatchups, cbStats, { ...proj, who }, prog(0, 0, 0.5));   // r1 done; q2,k2 still going
+  const cs = calcCatStats(cbMatchups.map(m => ({ ...m, players_points: Object.fromEntries(m.starters.map(p => [p, 1])) })), cbStats);
+  const plan = comebackPlan(cs, pcs, 1, 2);
+  assert.ok(plan.out); assert.strictEqual(plan.left.length, 0);
+  assert.ok(comebackHTML(plan, 'Alpha').includes('lineup is finished'));
+});
+test('the matchup card shows the callout only for the trailing side while live', () => {
+  S.currentWeek = 1; S.maxWeek = 1; S.selectedWeek = 1; S.seasonIdx = 0; S.seasonStarted = true;
+  S.rosterMap = { 1: 'Alpha', 2: 'Beta' };
+  const pcs = blendProjections(cbMatchups, cbStats, { ...proj, who }, prog(0, 0.5, 0));
+  const cs = calcCatStats(cbMatchups.map(m => ({ ...m, players_points: Object.fromEntries(m.starters.map(p => [p, 1])) })), cbStats);
+  const html = matchupCard(1, 2, cs, pcs);
+  assert.strictEqual((html.match(/mc-need-head/g) || []).length, 1, 'one plan, for the side behind');
+  assert.ok(html.includes('<b>Alpha</b> needs'));
 });
 
 (async () => {

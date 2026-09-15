@@ -27,24 +27,56 @@ async function loadWeekProjections(season, week) {
   const hit = S.projCache[key];
   if (hit && Date.now() - hit.at < PROJ_TTL_MS) return hit;
   const rows = await fetchSoft(SLEEPER_WEEK_PROJ_URL(season, week), []);
-  const stats = {}, game = {}, team = {};
+  const stats = {}, game = {}, team = {}, who = {};
   for (const r of (rows || [])) {
     const pid = r.player_id || (r.player && r.player.player_id);
     if (!pid || !r.stats) continue;
     stats[String(pid)] = r.stats;
     if (r.game_id) game[String(pid)] = String(r.game_id);
     if (r.team)    team[String(pid)] = String(r.team);
+    // Position and a short name ride on every row, so the path-to-win callout can say "WR
+    // T. Hill still to play" without waiting on the 10MB player dictionary.
+    const pl = r.player || {};
+    const pos = String(pl.position || (r.stats && r.stats.pos) || '').toUpperCase();
+    const name = pl.last_name ? `${pl.first_name ? pl.first_name[0] + '. ' : ''}${pl.last_name}` : '';
+    if (pos || name) who[String(pid)] = { pos, name };
   }
   // A failed refresh keeps the copy we have rather than blanking the card.
   if (!Object.keys(stats).length && hit) return hit;
-  S.projCache[key] = { stats, game, team, at: Date.now() };
+  S.projCache[key] = { stats, game, team, who, at: Date.now() };
   return S.projCache[key];
+}
+
+// The NFL schedule for a season — every game with its status — cached briefly and shared by
+// the game-progress blend, the player card's upcoming-schedule rows and the defense-vs-
+// position ranks. Status changes during games, so the TTL is short; a failed refresh keeps
+// the copy in hand. `byTeam` is CODE → week → {opp, home, status, game_id, date}.
+const NFL_SCHED_TTL_MS = 60 * 1000;
+async function loadNflSchedule(season) {
+  const key = String(season);
+  const hit = S.nflSchedCache[key];
+  if (hit && Date.now() - hit.at < NFL_SCHED_TTL_MS) return hit;
+  const games = await fetchSoft(SLEEPER_SCHEDULE_URL(season), null);
+  if (!Array.isArray(games) || !games.length) return hit || null;
+  const byTeam = {};
+  for (const g of games) {
+    const wk = Number(g.week);
+    if (!wk || !g.home || !g.away) continue;
+    const status = String(g.status || '').toLowerCase();
+    (byTeam[g.home] = byTeam[g.home] || {})[wk] = { opp: g.away, home: true,  status, game_id: g.game_id, date: g.date };
+    (byTeam[g.away] = byTeam[g.away] || {})[wk] = { opp: g.home, home: false, status, game_id: g.game_id, date: g.date };
+  }
+  S.nflSchedCache[key] = { at: Date.now(), games, byTeam };
+  return S.nflSchedCache[key];
 }
 
 // Projections are only meaningful for a week that hasn't finished — for any past week the
 // actual result IS the answer, and showing a projection next to it is just noise.
+// That is the week in view and, before the Wednesday rollover, the one Sleeper has already
+// opened (S.maxWeek) — its Thursday-night forecast is the reason to tap › early.
 function projectionsApply() {
-  return isCurrentSeason() && S.selectedWeek === S.currentWeek && S.seasonStarted;
+  return isCurrentSeason() && S.seasonStarted
+      && S.selectedWeek >= S.currentWeek && S.selectedWeek <= S.maxWeek;
 }
 
 // Share of a game still to be played, from an ESPN scoreboard status block: 1 before kickoff,
@@ -64,10 +96,11 @@ function gameRemainingFromEspn(st) {
 // authority on "complete" (its stats are what the matchup is scored on); ESPN's clock refines
 // the games in between. Nothing here throws — a missing feed just means less precision.
 async function loadGameProgress(season, week) {
-  const [sched, board] = await Promise.all([
-    fetchSoft(SLEEPER_SCHEDULE_URL(season), null),
+  const [schedule, board] = await Promise.all([
+    loadNflSchedule(season),
     fetchSoft(ESPN_SCOREBOARD_URL(season, week), null),
   ]);
+  const sched = schedule && schedule.games;
   // ESPN, keyed by home team in Sleeper's spelling.
   const espn = {};
   for (const ev of (board && Array.isArray(board.events) ? board.events : [])) {
@@ -129,25 +162,39 @@ function projVariance(key, proj, rem) {
 
 // Blend live stats and projections into per-roster category totals in the same shape
 // calcCatStats returns — so the matchup card, score line and swing detection treat them
-// exactly like actuals — plus `var` (same shape, the unplayed variance) and `rem` (roster →
-// how many starter-games are still unplayed; 0 means that lineup is finished).
+// exactly like actuals — plus `var` (same shape, the unplayed variance), `rem` (roster →
+// how many starter-games are still unplayed; 0 means that lineup is finished), `tot`
+// (roster → starters in the lineup) and `left` (roster → the starters still to play, each
+// with his position, short name and the unplayed share of his projection per category —
+// what the path-to-win callout in 57-comeback.js reasons over).
 function blendProjections(matchups, stats, proj, prog) {
-  const out = { var: {}, rem: {} };
+  const out = { var: {}, rem: {}, tot: {}, left: {} };
+  const who = proj.who || {};
   for (const c of BAFL_CATS) { out[c.key] = {}; out.var[c.key] = {}; }
   for (const m of matchups) {
     const rid = m.roster_id;
-    out.rem[rid] = 0;
+    out.rem[rid] = 0; out.tot[rid] = 0; out.left[rid] = [];
     for (const c of BAFL_CATS) { out[c.key][rid] = 0; out.var[c.key][rid] = 0; }
     for (const pid of (m.starters || [])) {
       if (!pid || pid === '0') continue;                 // empty lineup slot
+      out.tot[rid]++;
       const act  = baflPlayerCats(stats[pid]);
       const prow = proj.stats[pid];
       const pc   = baflPlayerCats(prow);
       const r    = prow ? gameRemaining(prog, proj.game[pid], proj.team[pid]) : 0;
       out.rem[rid] += r;
+      const todo = {};
       for (const c of BAFL_CATS) {
         out[c.key][rid]     += act[c.key] + r * pc[c.key];
         out.var[c.key][rid] += projVariance(c.key, pc[c.key], r);
+        todo[c.key] = r * pc[c.key];
+      }
+      if (r > 0) {
+        const w = who[pid] || {};
+        const rec = (!w.pos && typeof playerRec === 'function') ? playerRec(pid) : null;
+        out.left[rid].push({ pid, rem: r, cats: todo,
+          pos: String(w.pos || (rec && rec.pos) || '').toUpperCase(),
+          name: w.name || (rec && rec.name) || '' });
       }
     }
   }

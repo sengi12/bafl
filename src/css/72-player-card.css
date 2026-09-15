@@ -240,7 +240,21 @@
 .pc-opp-inner{display:inline-flex;align-items:center;gap:3px;}
 .pc-opp-logo{width:14px;height:14px;object-fit:contain;}
 .pc-at,.pc-vs{font-size:8.5px;font-weight:800;color:var(--muted);}
-.pc-row-bye .pc-opp,.pc-row-dnp .pc-opp{color:var(--muted);font-size:9.5px;}
+.pc-row-bye .pc-opp{color:var(--muted);font-size:9.5px;}
+.pc-row-dnp .pc-cell,.pc-row-future .pc-cell{opacity:.6;}
+.pc-row-dnp .pc-opp,.pc-row-future .pc-opp{opacity:.85;}
+/* ── Defense vs position ──
+   The opponent code tinted by how generous that defense has been to the player's position
+   this season (49-dvp.js): green is a matchup to attack, red a tough draw. Applied after the
+   table renders, so the code is styled as a plain span until then. */
+.pc-opp-code{border-radius:4px;padding:0 3px;margin:0 -3px;}
+.pc-dvp{cursor:help;font-weight:900;margin:0;}
+.pc-dvp-easy{color:#8ff0a6;background:rgba(63,185,80,.2);}
+.pc-dvp-mid{color:#ffd98a;background:rgba(210,153,34,.16);}
+.pc-dvp-hard{color:#ffa9a4;background:rgba(248,81,73,.2);}
+.pc-dvp-slot{font-size:9.5px;color:var(--muted);padding:6px 2px 0;line-height:1.5;}
+.pc-dvp-slot:empty{display:none;}
+.pc-dvp-key{display:inline-block;border-radius:4px;padding:0 5px;margin-right:4px;font-weight:800;font-size:9px;}
 .pc-started{color:var(--accent);font-size:8px;margin-left:3px;vertical-align:super;}
 .pc-total-row .pc-wk{color:var(--accent);font-weight:900;}
 .pc-total-row .pc-opp{color:var(--muted);font-weight:700;font-size:9.5px;}

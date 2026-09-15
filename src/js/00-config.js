@@ -11,6 +11,12 @@ const AR_INTERVAL_MS       = 5 * 60 * 1000;  // auto-refresh every 5 min
 const REGULAR_SEASON_WEEKS = 14;              // weeks 1–14 are regular season
 const DH_WEEKS             = [2, 3, 13, 14];  // weeks that have a double header
 const PLAYOFF_CUTOFF       = 4;              // top 4 teams make playoffs
+// The app does not turn over to a new week the moment Sleeper does (Tuesday, hours after
+// Monday Night Football). The finished week stays in view until this hour, Eastern, on the
+// Wednesday that starts the next NFL week — see 12-week-clock.js.
+const WEEK_ROLLOVER_HOUR_ET = 6;
+// BAFL's sibling app. The crown in the corner of every screen opens it.
+const TRIPLECROWN_URL      = 'https://sengi12.github.io/triplecrown/';
 
 // ─── Sleeper endpoints ────────────────────────────────────────────────────
 const SLEEPER_PLAYERS_URL    = `${API}/players/nfl`;
@@ -26,6 +32,13 @@ const SLEEPER_WEEKLY_URL     = (pid, season) =>
 const BAFL_POSITIONS = ['QB', 'RB', 'WR', 'TE', 'K'];
 const SLEEPER_WEEK_PROJ_URL  = (season, week) =>
   `${API2}/projections/nfl/${season}/${week}?season_type=regular`
+  + BAFL_POSITIONS.map(p => `&position[]=${p}`).join('');
+
+// Every skill player's stat line for one week, with the OPPONENT on each row — what the
+// defense-vs-position matchup colours on the player card are built from (49-dvp.js).
+// Position-filtered like the projections request, for the same reason.
+const SLEEPER_WEEK_STATS_URL = (season, week) =>
+  `${API2}/stats/nfl/${season}/${week}?season_type=regular`
   + BAFL_POSITIONS.map(p => `&position[]=${p}`).join('');
 
 // Game state, for blending what has happened into the projections (58-projections.js).
@@ -54,7 +67,8 @@ const S = {
   rosters: [],
   userMap:   {},
   rosterMap: {},
-  currentWeek: 1,
+  currentWeek: 1,    // the week the app opens on — Sleeper's week, held back until Wednesday
+  maxWeek: 1,        // the newest week Sleeper has opened; reachable with › before the rollover
   selectedWeek: 1,
   activeTab: 'matchups',
   weekCache: {},     // `${leagueId}:${week}` → {matchups, stats}
@@ -66,6 +80,10 @@ const S = {
   playersPromise: null, // in-flight load, so concurrent callers share one fetch
   ownerByPid: null,     // pid → roster_id, rebuilt per season (drives "who rosters him?")
   nflSeason: null,      // current NFL season year, from Sleeper's state endpoint
+  nflState: null,       // the whole state payload (season, week, season_start_date)
+  nflStatePromise: null,
+  nflSchedCache: {},    // season → {at, games, byTeam} — the NFL schedule with per-game status
+  dvpCache: {},         // season → promise of defense-vs-position ranks (49-dvp.js)
   weeklyCache: {},      // `${season}:${pid}` → raw weekly json (player card)
   projCache: {},        // `${season}:${week}` → {stats: pid → projected stats, game: pid → game_id, team: pid → code, at}
   seasonStarted: false, // false when league is pre_draft / not yet scheduled

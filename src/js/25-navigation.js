@@ -2,15 +2,20 @@
 function updateWeekDisplay() {
   const isDH = DH_WEEKS.includes(S.selectedWeek);
   const dhDot = isDH ? '<span class="dh-dot" title="Double Header week"></span>' : '';
-  document.getElementById('weekLabel').innerHTML = `Week ${S.selectedWeek}${dhDot}`;
+  // A week Sleeper has opened but the app hasn't turned over to yet (12-week-clock.js).
+  const upcoming = S.selectedWeek > S.currentWeek;
+  const tag = upcoming
+    ? `<span class="wk-tag" title="Sleeper has opened this week; BAFL turns over to it Wednesday at ${WEEK_ROLLOVER_HOUR_ET}am ET">next</span>`
+    : '';
+  document.getElementById('weekLabel').innerHTML = `Week ${S.selectedWeek}${dhDot}${tag}`;
   document.getElementById('btnPrev').disabled = S.selectedWeek <= 1;
-  document.getElementById('btnNext').disabled = S.selectedWeek >= S.currentWeek;
+  document.getElementById('btnNext').disabled = S.selectedWeek >= S.maxWeek;
   document.getElementById('updatedTag').textContent = `Updated ${new Date().toLocaleTimeString()}`;
 }
 
 async function changeWeek(d) {
   const nw = S.selectedWeek + d;
-  if (nw < 1 || nw > S.currentWeek) return;
+  if (nw < 1 || nw > S.maxWeek) return;
   S.selectedWeek = nw;
   updateWeekDisplay();
   stopAutoRefresh();
