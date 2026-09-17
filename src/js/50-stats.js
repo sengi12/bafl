@@ -87,3 +87,25 @@ function calcResult(cs, rid1, rid2) {
   };
 }
 
+
+// ─── Standings order ──────────────────────────────────────────────────────
+// One comparator for every place the league is ranked — the standings table and the playoff
+// seeds — so they can never disagree. A row is {wins, losses, ties, pf, pa, ty, name, rid}.
+//
+//   1. Winning percentage: a tie is half a win, so 5-2-1 sits above 5-2-0 and below 6-2-0.
+//   2. Points for — category wins, with the half-point a total-yards tiebreak earns.
+//   3. Points against, FEWER first: at the same record and PF, the team that gave up less
+//      has been the better team. This used to be missing, which left equal-PF teams in
+//      roster order.
+//   4. Season total yards, the same measure that breaks a level matchup.
+//   5. Name, so the order is stable and never depends on the roster id Sleeper handed out.
+// Negative means `a` ranks ahead of `b`.
+function standingsCompare(a, b) {
+  const pct = r => (r.wins || 0) + (r.ties || 0) / 2;
+  return (pct(b) - pct(a))
+      || ((b.pf || 0) - (a.pf || 0))
+      || ((a.pa || 0) - (b.pa || 0))
+      || ((b.ty || 0) - (a.ty || 0))
+      || String(a.name || '').localeCompare(String(b.name || ''))
+      || ((a.rid || 0) - (b.rid || 0));
+}

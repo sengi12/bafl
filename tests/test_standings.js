@@ -16,7 +16,7 @@ for (const f of ['00-config.js', '05-helpers.js', '50-stats.js', '65-render-stan
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'src/js', f), 'utf8'), ctx, { filename: f });
 const g = n => vm.runInContext(n, ctx);
 const S = g('S'), sortStandingsRows = g('sortStandingsRows'), standingsTableHTML = g('standingsTableHTML');
-const STANDINGS_COLS = g('STANDINGS_COLS'), BAFL_CATS = g('BAFL_CATS');
+const STANDINGS_COLS = g('STANDINGS_COLS'), BAFL_CATS = g('BAFL_CATS'), standingsCompare = g('standingsCompare');
 
 // Values built inside the vm have their own Array/Object prototypes, which deepStrictEqual
 // rejects; compare structure by JSON instead.
@@ -32,6 +32,23 @@ const rows = [
 ];
 const order = (key, dir) => sortStandingsRows(rows, key, dir).map(r => r.rid);
 
+console.log('standingsCompare');
+const rank = rs => rs.slice().sort(standingsCompare).map(r => r.rid);
+test('wins first, a tie counting half', () => {
+  same(rank([{ rid: 1, wins: 5, ties: 0, pf: 30 }, { rid: 2, wins: 5, ties: 1, pf: 1 }, { rid: 3, wins: 6, ties: 0, pf: 1 }]), [3, 2, 1]);
+});
+test('same record: points for, then FEWER points against', () => {
+  // The week-1 case: both 1-0 with 3 category wins, one gave up 2 and one gave up 1.
+  const a = { rid: 7, wins: 1, ties: 0, pf: 3, pa: 2 }, b = { rid: 9, wins: 1, ties: 0, pf: 3, pa: 1 };
+  same(rank([a, b]), [9, 7]); same(rank([b, a]), [9, 7], 'independent of input order');
+  same(rank([{ rid: 1, wins: 1, pf: 3.5, pa: 5 }, { rid: 2, wins: 1, pf: 3, pa: 0 }]), [1, 2], 'PF outranks PA');
+});
+test('then season total yards, then name — never the roster id', () => {
+  same(rank([{ rid: 1, wins: 1, pf: 3, pa: 2, ty: 800, name: 'B' }, { rid: 2, wins: 1, pf: 3, pa: 2, ty: 900, name: 'A' }]), [2, 1]);
+  same(rank([{ rid: 1, wins: 1, pf: 3, pa: 2, ty: 900, name: 'B' }, { rid: 2, wins: 1, pf: 3, pa: 2, ty: 900, name: 'A' }]), [2, 1]);
+  same(rank([{ rid: 2, wins: 1, pf: 3, pa: 2, ty: 900, name: 'A' }, { rid: 1, wins: 1, pf: 3, pa: 2, ty: 900, name: 'A' }]), [1, 2], 'rid only as the last resort');
+});
+
 console.log('sortStandingsRows');
 test('rank ascending is the standings; descending reverses it', () => {
   same(order('rank', 'asc'), [1, 2, 3, 4]);
@@ -40,11 +57,14 @@ test('rank ascending is the standings; descending reverses it', () => {
 test('team sorts case-insensitively', () => {
   same(order('team', 'asc'), [2, 4, 3, 1]);
 });
-test('record ranks wins then points for, a tie counting half', () => {
+test('record sorts by the full tiebreak ladder, a tie counting half', () => {
   same(order('record', 'desc'), [1, 2, 3, 4]);
+  same(order('record', 'asc'), [4, 3, 2, 1]);
   const r = rows.map(x => ({ ...x }));
   r[2].wins = 5; r[2].ties = 1; r[2].pf = 1;         // 5-2-1 beats 5-1-0 on the half win
   same(sortStandingsRows(r, 'record', 'desc')[0].rid, 3);
+  r[1].pf = 20; r[1].pa = 9;                          // same record and PF as Zed, fewer against
+  same(sortStandingsRows(r, 'record', 'desc').map(x => x.rid).slice(0, 3), [3, 2, 1]);
 });
 test('every category column sorts by its season total, highest first', () => {
   same(order('passing', 'desc'),   [2, 1, 3, 4]);

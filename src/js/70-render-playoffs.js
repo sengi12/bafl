@@ -26,8 +26,11 @@ async function renderPlayoffs() {
       }
       for (const {r1, r2} of (dhData[w] || [])) applyResult(st, cs, r1, r2);
     }
+    // Seeded by the same tiebreak ladder as the standings table (standingsCompare).
+    const cats = seasonCatTotals(rsWeek);
+    for (const s of Object.values(st)) s.ty = baflTotalYards(cats[s.rid] || {});
     const seeds = Object.values(st)
-      .sort((a,b) => b.wins !== a.wins ? b.wins - a.wins : b.pf - a.pf)
+      .sort(standingsCompare)
       .map((s, i) => ({ ...s, seed: i + 1 }));
     const byRid = {};
     seeds.forEach(s => byRid[s.rid] = s);

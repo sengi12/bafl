@@ -1758,18 +1758,22 @@ async function loadSchedule(week) {
   return S.schedCache[sKey];
 }
 
-// Deterministically compute which teams need a double header each DH week.
-// Algorithm:
-//   1. Fetch the full 14-week schedule to count how often each pair plays.
-//   2. Pairs that play only once are the "missing" matchups.
-//   3. Sort missing pairs by (lower_rid ASC, higher_rid ASC) for stability.
-//   4. Chunk evenly into DH_WEEKS in order.
-// Compute DH matchups by finding "source weeks" - regular-season weeks
-// whose matchups are all once-only pairs - then assigning them to DH weeks.
-// Pattern verified against 2025 double_headers.json:
-//   source weeks [6,7,8,9], DH weeks [2,3,13,14]
-//   lower half source -> upper DH:  6->13, 7->14
-//   upper half source -> lower DH:  8->2,  9->3
+// Which teams play a double header each DH week — derived from the schedule, so a new season
+// needs nothing pinned. The principle: a double header is a game against a team you would
+// otherwise face only once, and every such pair gets exactly one.
+//
+// Sleeper's 14-week slate for a 10-team league has each team meeting 5 opponents twice and
+// 4 once; those 20 once-only pairs are the double headers, four per team, one per DH week.
+// Sleeper builds the season as nine distinct weeks plus five repeats, which leaves four
+// "source weeks" whose matchups are entirely once-only pairs. Every pinned season (2023–2025)
+// used exactly those weeks' matchups as its double headers; which DH week each landed in is
+// the one thing that has varied. 2025's convention is followed here:
+//   source weeks [6,7,8,9] → DH weeks [2,3,13,14], lower half to the late weeks (6→13, 7→14)
+//   and upper half to the early ones (8→2, 9→3).
+// (2023 and 2024 mapped them in straight order, 6→2 … 9→14 — same pairs, different weeks.)
+// A schedule without clean source weeks falls to dhFactorization, which splits the once-only
+// pairs into four perfect matchings by backtracking. Either way the result is checked by
+// dhProblems: every team once per DH week, every pair once-only, no pair repeated.
 async function getDHMatchups() {
   if (S.dhMatchups !== null) return S.dhMatchups;
   if (!S.seasonStarted) { S.dhMatchups = {}; return S.dhMatchups; }
@@ -1838,20 +1842,81 @@ async function getDHMatchups() {
         .map(({ lo, hi }) => ({ r1: lo, r2: hi }));
     }
   } else {
-    // Fallback: backtracking perfect matching
-    let remaining = [...oncePairs]
+    // Fallback for a schedule without clean source weeks: split the once-only pairs into one
+    // perfect matching per DH week. This backtracks across ALL the weeks — choosing week 2's
+    // matching greedily could leave a remainder that no later week can pair off — and only
+    // if no full split exists does it settle for the greedy week-by-week matching.
+    const edges = [...oncePairs]
       .map(k => k.split(':').map(Number))
       .sort((a, b) => a[0] !== b[0] ? a[0] - b[0] : a[1] - b[1]);
-    for (const wk of sortedDHWeeks) {
-      const matching = findPerfectMatching(remaining);
-      const usedSet  = new Set(matching.map(([a,b]) => `${a}:${b}`));
-      dh[wk]    = matching.sort((a,b) => a[0]-b[0]||a[1]-b[1]).map(([r1,r2]) => ({r1,r2}));
-      remaining = remaining.filter(([a,b]) => !usedSet.has(`${a}:${b}`));
+    const teams = [...new Set(edges.flat())].sort((a, b) => a - b);
+    let rounds = dhFactorization(edges, sortedDHWeeks.length, teams);
+    if (!rounds) {
+      rounds = [];
+      let remaining = edges;
+      for (let i = 0; i < sortedDHWeeks.length; i++) {
+        const matching = findPerfectMatching(remaining);
+        const used = new Set(matching.map(([a, b]) => `${a}:${b}`));
+        rounds.push(matching);
+        remaining = remaining.filter(([a, b]) => !used.has(`${a}:${b}`));
+      }
     }
+    sortedDHWeeks.forEach((wk, i) => {
+      dh[wk] = (rounds[i] || []).slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(([r1, r2]) => ({ r1, r2 }));
+    });
   }
 
+  const problems = dhProblems(dh, oncePairs, S.rosters.map(r => r.roster_id));
+  if (problems.length) console.warn('Double headers: ' + problems.join('; '));
   S.dhMatchups = dh;
   return dh;
+}
+
+// What a correct double-header slate looks like, as a list of violations (empty = sound):
+// every DH week pairs every team exactly once; every pair is one the two teams meet only
+// once in the regular schedule; no pair is used in two DH weeks.
+function dhProblems(dh, oncePairs, teams) {
+  const out = [], seen = new Set();
+  const all = new Set((teams || []).map(Number));
+  for (const wk of Object.keys(dh)) {
+    const pairs = dh[wk] || [];
+    const used = new Set();
+    for (const { r1, r2 } of pairs) {
+      const key = `${Math.min(r1, r2)}:${Math.max(r1, r2)}`;
+      if (oncePairs && !oncePairs.has(key)) out.push(`week ${wk}: ${r1} v ${r2} already meet twice`);
+      if (seen.has(key)) out.push(`week ${wk}: ${r1} v ${r2} is a repeat double header`);
+      seen.add(key);
+      for (const r of [r1, r2]) { if (used.has(r)) out.push(`week ${wk}: team ${r} listed twice`); used.add(r); }
+    }
+    if (all.size && used.size !== all.size) out.push(`week ${wk}: ${used.size} of ${all.size} teams have a double header`);
+  }
+  return out;
+}
+
+// Every perfect matching of `edges` over `verts`, lazily, each as an array of [a, b].
+function* perfectMatchings(edges, verts) {
+  if (!verts.length) { yield []; return; }
+  const v = verts[0];
+  for (const [a, b] of edges) {
+    if (a !== v && b !== v) continue;
+    const u = a === v ? b : a;
+    if (!verts.includes(u)) continue;
+    const rest = verts.filter(x => x !== v && x !== u);
+    const restEdges = edges.filter(([x, y]) => x !== v && y !== v && x !== u && y !== u);
+    for (const m of perfectMatchings(restEdges, rest)) yield [[v, u], ...m];
+  }
+}
+// Split `edges` into `rounds` edge-disjoint perfect matchings over `teams`, or null if no
+// such split exists. Depth-first over the rounds, so an early choice that strands the
+// remainder is undone rather than shipped.
+function dhFactorization(edges, rounds, teams) {
+  if (rounds === 0) return [];
+  for (const m of perfectMatchings(edges, teams)) {
+    const used = new Set(m.map(([a, b]) => `${a}:${b}`));
+    const rest = dhFactorization(edges.filter(([a, b]) => !used.has(`${a}:${b}`)), rounds - 1, teams);
+    if (rest) return [m, ...rest];
+  }
+  return null;
 }
 function findPerfectMatching(edges) {
   if (!edges.length) return [];
@@ -3871,6 +3936,28 @@ function calcResult(cs, rid1, rid2) {
   };
 }
 
+
+// ─── Standings order ──────────────────────────────────────────────────────
+// One comparator for every place the league is ranked — the standings table and the playoff
+// seeds — so they can never disagree. A row is {wins, losses, ties, pf, pa, ty, name, rid}.
+//
+//   1. Winning percentage: a tie is half a win, so 5-2-1 sits above 5-2-0 and below 6-2-0.
+//   2. Points for — category wins, with the half-point a total-yards tiebreak earns.
+//   3. Points against, FEWER first: at the same record and PF, the team that gave up less
+//      has been the better team. This used to be missing, which left equal-PF teams in
+//      roster order.
+//   4. Season total yards, the same measure that breaks a level matchup.
+//   5. Name, so the order is stable and never depends on the roster id Sleeper handed out.
+// Negative means `a` ranks ahead of `b`.
+function standingsCompare(a, b) {
+  const pct = r => (r.wins || 0) + (r.ties || 0) / 2;
+  return (pct(b) - pct(a))
+      || ((b.pf || 0) - (a.pf || 0))
+      || ((a.pa || 0) - (b.pa || 0))
+      || ((b.ty || 0) - (a.ty || 0))
+      || String(a.name || '').localeCompare(String(b.name || ''))
+      || ((a.rid || 0) - (b.rid || 0));
+}
 // ─── Matchup card HTML ────────────────────────────────────────────────────
 // The team names used to be <th> cells in the same table as the category rows. That forced one
 // table row to budget score + name + "Categories" + name + score across the viewport, and on a
@@ -4571,12 +4658,12 @@ const STANDINGS_COLS = [
 ];
 
 // Value a row sorts on for a column. `rank` is the standings position, so its ascending order
-// IS the standings; `record` ranks wins, then points for, which is the same thing.
+// IS the standings. `record` has no single value — it is the full tiebreak ladder in
+// standingsCompare (50-stats.js), applied directly in sortStandingsRows.
 function standingsSortValue(row, key) {
   switch (key) {
     case 'rank':   return row.rank;
     case 'team':   return String(row.name || '').toLowerCase();
-    case 'record': return row.wins + row.ties / 2 + row.pf / 1e6;
     case 'pf':     return row.pf;
     case 'pa':     return row.pa;
     default:       return row.cats[key] || 0;
@@ -4586,8 +4673,12 @@ function standingsSortValue(row, key) {
 function sortStandingsRows(rows, key, dir) {
   const sign = dir === 'asc' ? 1 : -1;
   return rows.slice().sort((a, b) => {
-    const va = standingsSortValue(a, key), vb = standingsSortValue(b, key);
-    const c = typeof va === 'string' ? va.localeCompare(vb) : va - vb;
+    let c;
+    if (key === 'record') c = -standingsCompare(a, b);   // "higher" record = ranks ahead
+    else {
+      const va = standingsSortValue(a, key), vb = standingsSortValue(b, key);
+      c = typeof va === 'string' ? va.localeCompare(vb) : va - vb;
+    }
     return c !== 0 ? c * sign : a.rank - b.rank;
   });
 }
@@ -4690,8 +4781,9 @@ async function renderStandings() {
     for (const c of BAFL_CATS) ranks[c.key] = rankMapFor(cats, c.key);
 
     // Standings order fixes each team's rank; every other sort carries it along.
-    const rows = Object.values(st).sort((a, b) => b.wins !== a.wins ? b.wins - a.wins : b.pf - a.pf);
-    rows.forEach((s, i) => { s.rank = i + 1; s.cats = cats[s.rid] || {}; });
+    for (const s of Object.values(st)) { s.cats = cats[s.rid] || {}; s.ty = baflTotalYards(s.cats); }
+    const rows = Object.values(st).sort(standingsCompare);
+    rows.forEach((s, i) => { s.rank = i + 1; });
     standingsView = { rows, ranks, rsWeek };
 
     setPage(`
@@ -4735,8 +4827,11 @@ async function renderPlayoffs() {
       }
       for (const {r1, r2} of (dhData[w] || [])) applyResult(st, cs, r1, r2);
     }
+    // Seeded by the same tiebreak ladder as the standings table (standingsCompare).
+    const cats = seasonCatTotals(rsWeek);
+    for (const s of Object.values(st)) s.ty = baflTotalYards(cats[s.rid] || {});
     const seeds = Object.values(st)
-      .sort((a,b) => b.wins !== a.wins ? b.wins - a.wins : b.pf - a.pf)
+      .sort(standingsCompare)
       .map((s, i) => ({ ...s, seed: i + 1 }));
     const byRid = {};
     seeds.forEach(s => byRid[s.rid] = s);

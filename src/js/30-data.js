@@ -36,18 +36,22 @@ async function loadSchedule(week) {
   return S.schedCache[sKey];
 }
 
-// Deterministically compute which teams need a double header each DH week.
-// Algorithm:
-//   1. Fetch the full 14-week schedule to count how often each pair plays.
-//   2. Pairs that play only once are the "missing" matchups.
-//   3. Sort missing pairs by (lower_rid ASC, higher_rid ASC) for stability.
-//   4. Chunk evenly into DH_WEEKS in order.
-// Compute DH matchups by finding "source weeks" - regular-season weeks
-// whose matchups are all once-only pairs - then assigning them to DH weeks.
-// Pattern verified against 2025 double_headers.json:
-//   source weeks [6,7,8,9], DH weeks [2,3,13,14]
-//   lower half source -> upper DH:  6->13, 7->14
-//   upper half source -> lower DH:  8->2,  9->3
+// Which teams play a double header each DH week — derived from the schedule, so a new season
+// needs nothing pinned. The principle: a double header is a game against a team you would
+// otherwise face only once, and every such pair gets exactly one.
+//
+// Sleeper's 14-week slate for a 10-team league has each team meeting 5 opponents twice and
+// 4 once; those 20 once-only pairs are the double headers, four per team, one per DH week.
+// Sleeper builds the season as nine distinct weeks plus five repeats, which leaves four
+// "source weeks" whose matchups are entirely once-only pairs. Every pinned season (2023–2025)
+// used exactly those weeks' matchups as its double headers; which DH week each landed in is
+// the one thing that has varied. 2025's convention is followed here:
+//   source weeks [6,7,8,9] → DH weeks [2,3,13,14], lower half to the late weeks (6→13, 7→14)
+//   and upper half to the early ones (8→2, 9→3).
+// (2023 and 2024 mapped them in straight order, 6→2 … 9→14 — same pairs, different weeks.)
+// A schedule without clean source weeks falls to dhFactorization, which splits the once-only
+// pairs into four perfect matchings by backtracking. Either way the result is checked by
+// dhProblems: every team once per DH week, every pair once-only, no pair repeated.
 async function getDHMatchups() {
   if (S.dhMatchups !== null) return S.dhMatchups;
   if (!S.seasonStarted) { S.dhMatchups = {}; return S.dhMatchups; }
@@ -116,20 +120,81 @@ async function getDHMatchups() {
         .map(({ lo, hi }) => ({ r1: lo, r2: hi }));
     }
   } else {
-    // Fallback: backtracking perfect matching
-    let remaining = [...oncePairs]
+    // Fallback for a schedule without clean source weeks: split the once-only pairs into one
+    // perfect matching per DH week. This backtracks across ALL the weeks — choosing week 2's
+    // matching greedily could leave a remainder that no later week can pair off — and only
+    // if no full split exists does it settle for the greedy week-by-week matching.
+    const edges = [...oncePairs]
       .map(k => k.split(':').map(Number))
       .sort((a, b) => a[0] !== b[0] ? a[0] - b[0] : a[1] - b[1]);
-    for (const wk of sortedDHWeeks) {
-      const matching = findPerfectMatching(remaining);
-      const usedSet  = new Set(matching.map(([a,b]) => `${a}:${b}`));
-      dh[wk]    = matching.sort((a,b) => a[0]-b[0]||a[1]-b[1]).map(([r1,r2]) => ({r1,r2}));
-      remaining = remaining.filter(([a,b]) => !usedSet.has(`${a}:${b}`));
+    const teams = [...new Set(edges.flat())].sort((a, b) => a - b);
+    let rounds = dhFactorization(edges, sortedDHWeeks.length, teams);
+    if (!rounds) {
+      rounds = [];
+      let remaining = edges;
+      for (let i = 0; i < sortedDHWeeks.length; i++) {
+        const matching = findPerfectMatching(remaining);
+        const used = new Set(matching.map(([a, b]) => `${a}:${b}`));
+        rounds.push(matching);
+        remaining = remaining.filter(([a, b]) => !used.has(`${a}:${b}`));
+      }
     }
+    sortedDHWeeks.forEach((wk, i) => {
+      dh[wk] = (rounds[i] || []).slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(([r1, r2]) => ({ r1, r2 }));
+    });
   }
 
+  const problems = dhProblems(dh, oncePairs, S.rosters.map(r => r.roster_id));
+  if (problems.length) console.warn('Double headers: ' + problems.join('; '));
   S.dhMatchups = dh;
   return dh;
+}
+
+// What a correct double-header slate looks like, as a list of violations (empty = sound):
+// every DH week pairs every team exactly once; every pair is one the two teams meet only
+// once in the regular schedule; no pair is used in two DH weeks.
+function dhProblems(dh, oncePairs, teams) {
+  const out = [], seen = new Set();
+  const all = new Set((teams || []).map(Number));
+  for (const wk of Object.keys(dh)) {
+    const pairs = dh[wk] || [];
+    const used = new Set();
+    for (const { r1, r2 } of pairs) {
+      const key = `${Math.min(r1, r2)}:${Math.max(r1, r2)}`;
+      if (oncePairs && !oncePairs.has(key)) out.push(`week ${wk}: ${r1} v ${r2} already meet twice`);
+      if (seen.has(key)) out.push(`week ${wk}: ${r1} v ${r2} is a repeat double header`);
+      seen.add(key);
+      for (const r of [r1, r2]) { if (used.has(r)) out.push(`week ${wk}: team ${r} listed twice`); used.add(r); }
+    }
+    if (all.size && used.size !== all.size) out.push(`week ${wk}: ${used.size} of ${all.size} teams have a double header`);
+  }
+  return out;
+}
+
+// Every perfect matching of `edges` over `verts`, lazily, each as an array of [a, b].
+function* perfectMatchings(edges, verts) {
+  if (!verts.length) { yield []; return; }
+  const v = verts[0];
+  for (const [a, b] of edges) {
+    if (a !== v && b !== v) continue;
+    const u = a === v ? b : a;
+    if (!verts.includes(u)) continue;
+    const rest = verts.filter(x => x !== v && x !== u);
+    const restEdges = edges.filter(([x, y]) => x !== v && y !== v && x !== u && y !== u);
+    for (const m of perfectMatchings(restEdges, rest)) yield [[v, u], ...m];
+  }
+}
+// Split `edges` into `rounds` edge-disjoint perfect matchings over `teams`, or null if no
+// such split exists. Depth-first over the rounds, so an early choice that strands the
+// remainder is undone rather than shipped.
+function dhFactorization(edges, rounds, teams) {
+  if (rounds === 0) return [];
+  for (const m of perfectMatchings(edges, teams)) {
+    const used = new Set(m.map(([a, b]) => `${a}:${b}`));
+    const rest = dhFactorization(edges.filter(([a, b]) => !used.has(`${a}:${b}`)), rounds - 1, teams);
+    if (rest) return [m, ...rest];
+  }
+  return null;
 }
 function findPerfectMatching(edges) {
   if (!edges.length) return [];

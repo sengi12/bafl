@@ -65,12 +65,12 @@ const STANDINGS_COLS = [
 ];
 
 // Value a row sorts on for a column. `rank` is the standings position, so its ascending order
-// IS the standings; `record` ranks wins, then points for, which is the same thing.
+// IS the standings. `record` has no single value — it is the full tiebreak ladder in
+// standingsCompare (50-stats.js), applied directly in sortStandingsRows.
 function standingsSortValue(row, key) {
   switch (key) {
     case 'rank':   return row.rank;
     case 'team':   return String(row.name || '').toLowerCase();
-    case 'record': return row.wins + row.ties / 2 + row.pf / 1e6;
     case 'pf':     return row.pf;
     case 'pa':     return row.pa;
     default:       return row.cats[key] || 0;
@@ -80,8 +80,12 @@ function standingsSortValue(row, key) {
 function sortStandingsRows(rows, key, dir) {
   const sign = dir === 'asc' ? 1 : -1;
   return rows.slice().sort((a, b) => {
-    const va = standingsSortValue(a, key), vb = standingsSortValue(b, key);
-    const c = typeof va === 'string' ? va.localeCompare(vb) : va - vb;
+    let c;
+    if (key === 'record') c = -standingsCompare(a, b);   // "higher" record = ranks ahead
+    else {
+      const va = standingsSortValue(a, key), vb = standingsSortValue(b, key);
+      c = typeof va === 'string' ? va.localeCompare(vb) : va - vb;
+    }
     return c !== 0 ? c * sign : a.rank - b.rank;
   });
 }
@@ -184,8 +188,9 @@ async function renderStandings() {
     for (const c of BAFL_CATS) ranks[c.key] = rankMapFor(cats, c.key);
 
     // Standings order fixes each team's rank; every other sort carries it along.
-    const rows = Object.values(st).sort((a, b) => b.wins !== a.wins ? b.wins - a.wins : b.pf - a.pf);
-    rows.forEach((s, i) => { s.rank = i + 1; s.cats = cats[s.rid] || {}; });
+    for (const s of Object.values(st)) { s.cats = cats[s.rid] || {}; s.ty = baflTotalYards(s.cats); }
+    const rows = Object.values(st).sort(standingsCompare);
+    rows.forEach((s, i) => { s.rank = i + 1; });
     standingsView = { rows, ranks, rsWeek };
 
     setPage(`

@@ -43,7 +43,10 @@ Ties on categories are broken by **total yards**. That scoring lives in exactly 
   wins read as 100% whatever the remaining games do — and by the end of the week the bar is
   one colour end to end. The model lives in [src/js/59-winprob.js](src/js/59-winprob.js).
 - **Standings** — records including double headers, plus each team's season category totals
-  heat-mapped by league rank. That grid is the quickest read on who is a passing juggernaut and
+  heat-mapped by league rank. Teams are ordered by winning percentage (a tie is half a win),
+  then points for, then **fewer points against**, then season total yards, then name — the
+  same ladder seeds the playoff bracket, so the two can never disagree (`standingsCompare` in
+  [src/js/50-stats.js](src/js/50-stats.js)). That grid is the quickest read on who is a passing juggernaut and
   who is one category away from a trade. Click any column header to sort by it (again to flip);
   the rank column always shows the team's standings position, whatever the order.
 - **Leaders** — league-wide category races, per **team** or per **player**. Player totals count
@@ -169,6 +172,7 @@ node tests/test_projections.js   # blended projections, win probability, path to
 node tests/test_standings.js     # sortable standings: order, tie-breaks, header state
 node tests/test_week_clock.js    # the Wednesday-morning week rollover
 node tests/test_dvp.js           # defense vs position: aggregation, ranking, early-season blend
+node tests/test_dh.js            # double headers against the real 2023–2026 schedules
 ```
 
 The numeric filename prefixes fix concatenation order. This is concatenation, not module
@@ -223,7 +227,20 @@ TripleCrown, so they never run off screen at any window size:
 
 ## Double headers
 
-Weeks 2, 3, 13 and 14 each carry a second matchup. Exact pairings for past seasons are pinned
-in [`double_headers.json`](double_headers.json); any season not listed there falls back to
-deriving them from the schedule (see `getDHMatchups()` in
-[src/js/30-data.js](src/js/30-data.js)). To lock in a season, add its pairings to that file.
+Weeks 2, 3, 13 and 14 each carry a second matchup. The principle: a double header is a game
+against a team you would otherwise face only once, and every such pair gets exactly one.
+
+Sleeper's 14-week slate for ten teams has each team meeting five opponents twice and four once;
+those 20 once-only pairs are the double headers — four per team, one per DH week. Sleeper builds
+the season as nine distinct weeks plus five repeats, which leaves four *source weeks* made up
+entirely of once-only pairs. Every pinned season used exactly those weeks' matchups as its double
+headers; the derivation follows 2025's week order (6→13, 7→14, 8→2, 9→3 — 2023 and 2024 ran them
+straight, 6→2 through 9→14). `getDHMatchups()` in
+[src/js/30-data.js](src/js/30-data.js) derives all of this from the schedule, so a new season
+needs nothing pinned. A schedule without clean source weeks is split into four perfect matchings
+by backtracking instead, and every result is checked — each team once per DH week, every pair
+once-only, no pair twice — with any violation logged.
+
+Past seasons are pinned in [`double_headers.json`](double_headers.json), which always wins over
+the derivation when the season is listed. `tests/test_dh.js` runs the derivation against the real
+2023–2026 schedules (captured in `tests/fixtures_schedules.json`).
