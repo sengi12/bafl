@@ -56,6 +56,9 @@
   .roster-overlay{--rm-pad-x:8px;
     --rm-pad-t:max(12px,env(safe-area-inset-top,0px));
     --rm-pad-b:max(12px,env(safe-area-inset-bottom,0px));}
+  .ts-game{grid-template-columns:40px minmax(0,1fr) 92px;gap:7px;padding-left:5px;padding-right:5px;}
+  .ts-opponent>span{font-size:12px;}
+  .ts-outcome b{font-size:9px;}
   .ps-overlay{--ps-pad-x:8px;--ps-pad-t:max(10px,env(safe-area-inset-top,0px));}
   .ps-modal{width:100%;}
 }

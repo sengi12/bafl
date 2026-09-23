@@ -382,10 +382,18 @@ html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavi
   display:flex;align-items:center;gap:10px;background:var(--surface2);flex:none;}
 .roster-modal-title{font-size:16px;font-weight:900;flex:1;min-width:0;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.roster-modal-close{background:var(--surface3);border:1px solid var(--border);
+.roster-modal-action,.roster-modal-close{background:var(--surface3);border:1px solid var(--border);
   color:var(--muted);border-radius:50%;width:34px;height:34px;font-size:15px;flex:none;
   cursor:pointer;display:flex;align-items:center;justify-content:center;}
-.roster-modal-close:hover{color:var(--text);border-color:var(--accent);}
+.roster-modal-action[hidden]{display:none;}
+.roster-modal-action:hover,.roster-modal-close:hover{color:var(--text);border-color:var(--accent);}
+.calendar-glyph{position:relative;width:16px;height:15px;border:2px solid currentColor;
+  border-radius:3px;box-sizing:border-box;display:block;}
+.calendar-glyph::before{content:"";position:absolute;left:-2px;right:-2px;top:3px;
+  border-top:2px solid currentColor;}
+.calendar-glyph::after{content:"";position:absolute;left:2px;top:-4px;width:2px;height:4px;
+  background:currentColor;box-shadow:6px 0 currentColor;}
+.schedule-back{font-size:27px;line-height:1;transform:translateY(-1px);}
 .roster-modal-body{flex:1;min-height:0;overflow-y:auto;padding:8px 12px 16px;
   -webkit-overflow-scrolling:touch;overscroll-behavior:none;}
 .roster-sec-head{font-size:9.5px;font-weight:800;color:var(--muted);
@@ -430,6 +438,28 @@ html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavi
 .lcs-val{font-family:var(--mono);font-size:14px;font-weight:900;color:var(--text);line-height:1;}
 .lcs-total{border-color:rgba(61,155,255,.35);background:rgba(61,155,255,.08);}
 .lcs-total .lcs-val{color:var(--accent);}
+
+/* ── Full-season team schedule ───────────────────────────────────────────── */
+.team-schedule{padding:4px 0;}
+.ts-game{display:grid;grid-template-columns:48px minmax(0,1fr) 105px;align-items:center;
+  gap:10px;min-height:62px;padding:8px 9px;border-bottom:1px solid var(--border);}
+.ts-game:last-child{border-bottom:0;}
+.ts-game.current{background:rgba(61,155,255,.07);box-shadow:inset 3px 0 var(--accent);}
+.ts-game.double-header{background-color:rgba(255,184,77,.055);}
+.ts-game.current.double-header{background-color:rgba(61,155,255,.07);}
+.ts-week{display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);}
+.ts-week small{font-size:8px;font-weight:800;letter-spacing:.7px;min-height:10px;}
+.ts-week-num{font-family:var(--mono);font-size:20px;font-weight:900;color:var(--text);line-height:1.1;}
+.ts-opponent{min-width:0;display:flex;flex-direction:column;gap:3px;}
+.ts-opponent>span{font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ts-opponent small{font-size:8px;font-weight:800;letter-spacing:.55px;color:var(--muted);}
+.ts-game.double-header .ts-opponent small{color:#ffb84d;}
+.ts-outcome{justify-self:end;text-align:right;display:flex;flex-direction:column;gap:3px;min-width:0;}
+.ts-outcome b{font-size:10px;letter-spacing:.35px;}
+.ts-outcome small{font-family:var(--mono);font-size:12px;font-weight:800;color:var(--muted);}
+.ts-outcome.win b{color:var(--success);}
+.ts-outcome.loss b{color:var(--danger);}
+.ts-outcome.tie b,.ts-outcome.pending b,.ts-outcome.loading-result b{color:var(--muted);}
 /* ═══ Player card ═══════════════════════════════════════════════════════════
    Sizing contract (shared with TripleCrown). The OVERLAY is the scroll container and the CARD
    centres inside it with margin:auto, so nothing about the card's placement depends on a
@@ -913,6 +943,9 @@ html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavi
   .roster-overlay{--rm-pad-x:8px;
     --rm-pad-t:max(12px,env(safe-area-inset-top,0px));
     --rm-pad-b:max(12px,env(safe-area-inset-bottom,0px));}
+  .ts-game{grid-template-columns:40px minmax(0,1fr) 92px;gap:7px;padding-left:5px;padding-right:5px;}
+  .ts-opponent>span{font-size:12px;}
+  .ts-outcome b{font-size:9px;}
   .ps-overlay{--ps-pad-x:8px;--ps-pad-t:max(10px,env(safe-area-inset-top,0px));}
   .ps-modal{width:100%;}
 }
@@ -1001,6 +1034,10 @@ html.pc-locked .tc-link{display:none;}
   <div class="roster-modal" onclick="event.stopPropagation()">
     <div class="roster-modal-head">
       <span class="roster-modal-title" id="rosterModalTitle"></span>
+      <button class="roster-modal-action" id="rosterScheduleBtn" onclick="toggleRosterSchedule()"
+              title="View full season schedule" aria-label="View full season schedule" hidden>
+        <span class="calendar-glyph" aria-hidden="true"></span>
+      </button>
       <button class="roster-modal-close" onclick="closeRosterModal()">✕</button>
     </div>
     <div class="roster-modal-body" id="rosterModalBody"></div>
@@ -2109,12 +2146,15 @@ async function eligibleSeasons(pid) {
 // Click a team name anywhere and this shows its lineup for the selected week: starters first,
 // then the bench, each with the week's stat line. Every row opens that player's card.
 const POS_ORDER = { QB: 0, RB: 1, WR: 2, TE: 3, K: 4 };
+let ROSTER_VIEW_TOKEN = 0;
 
 async function openRosterModal(rid) {
+  const token   = ++ROSTER_VIEW_TOKEN;
   const overlay = document.getElementById('rosterOverlay');
   const titleEl = document.getElementById('rosterModalTitle');
   const body    = document.getElementById('rosterModalBody');
 
+  setRosterModalMode('roster', rid);
   titleEl.textContent = S.rosterMap[rid] || `Team ${rid}`;
   body.innerHTML = '<div class="loading"><div class="spin"></div><div>Loading roster…</div></div>';
   overlay.classList.add('active');
@@ -2165,8 +2205,10 @@ async function openRosterModal(rid) {
       html += benchList.map(({ pid, p }) => playerRowHTML(pid, p, false, weekStats[pid])).join('');
     }
     if (!html) html = '<div class="empty-box">No players found.</div>';
+    if (token !== ROSTER_VIEW_TOKEN) return;
     body.innerHTML = html;
   } catch (e) {
+    if (token !== ROSTER_VIEW_TOKEN) return;
     body.innerHTML = `<div class="error-box">⚠ ${esc(e.message)}</div>`;
   }
 }
@@ -2231,6 +2273,7 @@ function playerRowHTML(pid, p, isStarter, ps) {
 }
 
 function closeRosterModal() {
+  ROSTER_VIEW_TOKEN++;
   document.getElementById('rosterOverlay').classList.remove('active');
   // Only release the page lock if a player card isn't still open on top of the modal.
   if (!PC) pcLockPage(false);
@@ -2242,6 +2285,134 @@ document.addEventListener('keydown', e => {
   if (PC) return;   // the card's own handler takes this one
   closeRosterModal();
 });
+// ─── Team schedule ───────────────────────────────────────────────────────
+// The calendar in the roster modal expands one team into every regular-season game. Double
+// headers are separate rows because each opponent produces a separate standings result.
+function setRosterModalMode(view, rid) {
+  const overlay = document.getElementById('rosterOverlay');
+  const button = document.getElementById('rosterScheduleBtn');
+  if (!overlay || !button) return;
+  overlay.dataset.view = view;
+  overlay.dataset.rid = String(rid);
+  button.hidden = false;
+  button.innerHTML = view === 'schedule'
+    ? '<span class="schedule-back" aria-hidden="true">‹</span>'
+    : '<span class="calendar-glyph" aria-hidden="true"></span>';
+  button.title = view === 'schedule' ? 'Back to roster' : 'View full season schedule';
+  button.setAttribute('aria-label', button.title);
+  button.classList.toggle('is-back', view === 'schedule');
+}
+
+function toggleRosterSchedule() {
+  const overlay = document.getElementById('rosterOverlay');
+  const rid = Number(overlay.dataset.rid);
+  if (!rid) return;
+  if (overlay.dataset.view === 'schedule') openRosterModal(rid);
+  else openTeamSchedule(rid);
+}
+
+function scheduleWeekIsFinal(week) {
+  return !isCurrentSeason()
+    || week < S.currentWeek
+    || (week === S.currentWeek && S.maxWeek > S.currentWeek);
+}
+
+function scheduleOpponent(matchups, rid) {
+  const mine = matchups.find(m => Number(m.roster_id) === Number(rid));
+  if (!mine || mine.matchup_id == null) return null;
+  const opponent = matchups.find(m => m.matchup_id === mine.matchup_id && Number(m.roster_id) !== Number(rid));
+  return opponent ? Number(opponent.roster_id) : null;
+}
+
+function scheduleOutcome(cats, rid, opponent, projected) {
+  if (!cats) return { state: 'pending', label: projected ? 'Projection unavailable' : 'Awaiting result', score: '' };
+  const result = calcResult(cats, rid, opponent);
+  const state = result.s1dec > result.s2dec ? 'win' : result.s1dec < result.s2dec ? 'loss' : 'tie';
+  const score = `${result.s1}${result.tb1 ? '*' : ''}–${result.s2}${result.tb2 ? '*' : ''}`;
+  return { state, label: `${projected ? 'Projected ' : ''}${state.toUpperCase()}`, score };
+}
+
+function scheduleGames(matchupsByWeek, dh, rid) {
+  const games = [];
+  for (let week = 1; week <= REGULAR_SEASON_WEEKS; week++) {
+    const opponent = scheduleOpponent(matchupsByWeek[week] || [], rid);
+    if (opponent) games.push({ week, opponent, dh: false });
+    const extra = (dh[week] || []).find(pair => Number(pair.r1) === Number(rid) || Number(pair.r2) === Number(rid));
+    if (extra) games.push({
+      week,
+      opponent: Number(extra.r1) === Number(rid) ? Number(extra.r2) : Number(extra.r1),
+      dh: true,
+    });
+  }
+  return games;
+}
+
+function teamScheduleHTML(rid, games, outcomes) {
+  if (!games.length) return '<div class="empty-box">No regular-season schedule is available.</div>';
+  let lastWeek = 0;
+  return `<div class="team-schedule">${games.map((game, index) => {
+    const result = outcomes[game.week];
+    const outcome = result ? scheduleOutcome(result.cats, rid, game.opponent, result.projected) : null;
+    const weekLabel = game.week === lastWeek ? '' : `<span class="ts-week-num">${game.week}</span>`;
+    lastWeek = game.week;
+    const status = outcome
+      ? `<span class="ts-outcome ${outcome.state}"><b>${outcome.label}</b><small>${outcome.score}</small></span>`
+      : `<span class="ts-outcome loading-result"><b>PROJECTING</b><small>…</small></span>`;
+    return `<div class="ts-game${game.dh ? ' double-header' : ''}${game.week === S.currentWeek ? ' current' : ''}">
+      <div class="ts-week"><small>${weekLabel ? 'WK' : ''}</small>${weekLabel}</div>
+      <div class="ts-opponent"><span>${esc(S.rosterMap[game.opponent] || `Team ${game.opponent}`)}</span>
+        ${game.dh ? '<small>DOUBLE HEADER</small>' : '<small>REGULAR MATCHUP</small>'}</div>
+      ${status}
+    </div>`;
+  }).join('')}</div>`;
+}
+
+async function openTeamSchedule(rid) {
+  const token = ++ROSTER_VIEW_TOKEN;
+  const body = document.getElementById('rosterModalBody');
+  document.getElementById('rosterModalTitle').textContent = `${S.rosterMap[rid] || `Team ${rid}`} Schedule`;
+  setRosterModalMode('schedule', rid);
+  body.innerHTML = '<div class="loading"><div class="spin"></div><div>Loading schedule…</div></div>';
+
+  try {
+    const weeks = Array.from({ length: REGULAR_SEASON_WEEKS }, (_, index) => index + 1);
+    const schedules = await Promise.all(weeks.map(week => loadSchedule(week)));
+    const matchupsByWeek = Object.fromEntries(weeks.map((week, index) => [week, schedules[index]]));
+    const games = scheduleGames(matchupsByWeek, await getDHMatchups(), rid);
+    const outcomes = {};
+
+    await Promise.all(weeks.filter(scheduleWeekIsFinal).map(async week => {
+      const data = await loadWeek(week);
+      outcomes[week] = { cats: calcCatStats(data.matchups, data.stats), projected: false };
+    }));
+    if (token !== ROSTER_VIEW_TOKEN) return;
+    body.innerHTML = teamScheduleHTML(rid, games, outcomes);
+
+    const forecastWeeks = weeks.filter(week => !scheduleWeekIsFinal(week));
+    for (let index = 0; index < forecastWeeks.length; index += 2) {
+      const batch = forecastWeeks.slice(index, index + 2);
+      await Promise.all(batch.map(async week => {
+        const matchups = matchupsByWeek[week] || [];
+        const actual = week === S.currentWeek ? await loadWeek(week) : { stats: {} };
+        const projection = await loadWeekProjections(S.league.season, week);
+        if (!projection || !Object.keys(projection.stats || {}).length) {
+          outcomes[week] = { cats: null, projected: true };
+          return;
+        }
+        const progress = week === S.currentWeek ? await loadGameProgress(S.league.season, week) : null;
+        outcomes[week] = {
+          cats: blendProjections(matchups, actual.stats || {}, projection, progress),
+          projected: true,
+        };
+      }));
+      if (token !== ROSTER_VIEW_TOKEN) return;
+      body.innerHTML = teamScheduleHTML(rid, games, outcomes);
+    }
+  } catch (error) {
+    if (token !== ROSTER_VIEW_TOKEN) return;
+    body.innerHTML = `<div class="error-box">⚠ ${esc(error.message)}</div>`;
+  }
+}
 // ─── ESPN enrichment (draft info + college game logs) ─────────────────────
 // Everything here is browser-reachable and needs no pre-baked data, which is the whole reason
 // it survives the "no seed" constraint. Two things come from ESPN that Sleeper simply doesn't

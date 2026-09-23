@@ -2,12 +2,15 @@
 // Click a team name anywhere and this shows its lineup for the selected week: starters first,
 // then the bench, each with the week's stat line. Every row opens that player's card.
 const POS_ORDER = { QB: 0, RB: 1, WR: 2, TE: 3, K: 4 };
+let ROSTER_VIEW_TOKEN = 0;
 
 async function openRosterModal(rid) {
+  const token   = ++ROSTER_VIEW_TOKEN;
   const overlay = document.getElementById('rosterOverlay');
   const titleEl = document.getElementById('rosterModalTitle');
   const body    = document.getElementById('rosterModalBody');
 
+  setRosterModalMode('roster', rid);
   titleEl.textContent = S.rosterMap[rid] || `Team ${rid}`;
   body.innerHTML = '<div class="loading"><div class="spin"></div><div>Loading roster…</div></div>';
   overlay.classList.add('active');
@@ -58,8 +61,10 @@ async function openRosterModal(rid) {
       html += benchList.map(({ pid, p }) => playerRowHTML(pid, p, false, weekStats[pid])).join('');
     }
     if (!html) html = '<div class="empty-box">No players found.</div>';
+    if (token !== ROSTER_VIEW_TOKEN) return;
     body.innerHTML = html;
   } catch (e) {
+    if (token !== ROSTER_VIEW_TOKEN) return;
     body.innerHTML = `<div class="error-box">⚠ ${esc(e.message)}</div>`;
   }
 }
@@ -124,6 +129,7 @@ function playerRowHTML(pid, p, isStarter, ps) {
 }
 
 function closeRosterModal() {
+  ROSTER_VIEW_TOKEN++;
   document.getElementById('rosterOverlay').classList.remove('active');
   // Only release the page lock if a player card isn't still open on top of the modal.
   if (!PC) pcLockPage(false);

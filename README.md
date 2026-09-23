@@ -66,6 +66,9 @@ Ties on categories are broken by **total yards**. That scoring lives in exactly 
   7·(N−1) days after the season's start date (which Sleeper publishes, and which is always the
   Wednesday before the opener) at `WEEK_ROLLOVER_HOUR_ET`.
 - **Player search** — search any NFL player and see who rosters him, or "FA".
+- **Team schedules** — click any team name, then the calendar in its roster popup, to see all
+  14 regular-season weeks. Double headers appear as separate games; completed matchups show the
+  actual category result and upcoming matchups fill in with Sleeper-based projected results.
 - **Past seasons** — the season picker walks Sleeper's `previous_league_id` chain, so every
   prior BAFL season is browsable with the same views.
 

@@ -67,6 +67,10 @@
   <div class="roster-modal" onclick="event.stopPropagation()">
     <div class="roster-modal-head">
       <span class="roster-modal-title" id="rosterModalTitle"></span>
+      <button class="roster-modal-action" id="rosterScheduleBtn" onclick="toggleRosterSchedule()"
+              title="View full season schedule" aria-label="View full season schedule" hidden>
+        <span class="calendar-glyph" aria-hidden="true"></span>
+      </button>
       <button class="roster-modal-close" onclick="closeRosterModal()">✕</button>
     </div>
     <div class="roster-modal-body" id="rosterModalBody"></div>
