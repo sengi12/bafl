@@ -158,11 +158,33 @@ function closePlayerCard() {
   if (!rosterOpen) pcLockPage(false);
 }
 
-// While the card is open the page behind it must not scroll. Setting body.overflow alone
-// isn't enough on iOS — the browser will still run pull-to-refresh from the backdrop — so the
-// lock goes on <html> as a class and the CSS pairs it with overscroll-behavior:contain.
+// While an overlay is open the page behind it must not scroll — and must still be exactly
+// where it was when the overlay closes. The lock is a class on <html> whose CSS (00-base.css)
+// pins <body> with position:fixed at the page's current offset: the document can't scroll
+// (iOS included, where overflow:hidden alone is ignored for touch) and nothing about its
+// layout collapses, so there is no height change for the browser to clamp the scroll
+// position against. Unlocking puts the body back in flow and restores the offset in the
+// same task, before anything paints.
+//
+// Overlays stack (a card over a roster, a card over search) and each asks for the lock, so
+// the call is idempotent: only the first lock records the offset — once the body is fixed
+// the page reports scrollY 0, and recording that would lose the real position.
+let _pcScrollY = 0;
 function pcLockPage(on) {
-  try { document.documentElement.classList.toggle('pc-locked', !!on); } catch { /* no-op */ }
+  try {
+    const root = document.documentElement;
+    const locked = root.classList.contains('pc-locked');
+    if (!!on === locked) return;
+    if (on) {
+      _pcScrollY = window.scrollY || window.pageYOffset || (document.scrollingElement || root).scrollTop || 0;
+      root.style.setProperty('--pc-scroll-y', `-${Math.round(_pcScrollY)}px`);
+      root.classList.add('pc-locked');
+    } else {
+      root.classList.remove('pc-locked');
+      root.style.removeProperty('--pc-scroll-y');
+      window.scrollTo(0, _pcScrollY);
+    }
+  } catch { /* no DOM */ }
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && PC) closePlayerCard(); });
 

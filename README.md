@@ -176,6 +176,7 @@ node tests/test_standings.js     # sortable standings: order, tie-breaks, header
 node tests/test_week_clock.js    # the Wednesday-morning week rollover
 node tests/test_dvp.js           # defense vs position: aggregation, ranking, early-season blend
 node tests/test_dh.js            # double headers against the real 2023–2026 schedules
+node tests/test_scroll_lock.js   # overlays keep the page's scroll position
 ```
 
 The numeric filename prefixes fix concatenation order. This is concatenation, not module
@@ -215,10 +216,13 @@ TripleCrown, so they never run off screen at any window size:
 - **The card is a flex column** — hero, tabs and season pills are fixed, the body is the one
   region that scrolls — and it centres in a scrolling overlay with `margin:auto`, so a short
   window shrinks the game log rather than pushing the header off the top.
-- **Nothing behind an overlay scrolls.** `html.pc-locked` freezes the page declaratively, and a
-  document-level touch/wheel guard cancels any gesture that doesn't land in a genuinely
-  scrollable region of the open overlay (the case CSS can't express). With nothing open, the
-  same guard kills iOS's rubber-band at the page and inner-scroller edges.
+- **Nothing behind an overlay scrolls, and the page stays put.** `html.pc-locked` pins the
+  body in place at its current scroll offset (position:fixed, so iOS can't touch-scroll it
+  either) and restores that offset on close — open a roster or a card from halfway down the
+  standings and you land back exactly there. A document-level touch/wheel guard cancels any
+  gesture that doesn't land in a genuinely scrollable region of the open overlay (the case CSS
+  can't express). With nothing open, the same guard kills iOS's rubber-band at the page and
+  inner-scroller edges.
 - **Swipe down on the card's hero to dismiss it.** The card follows the finger 1:1 and, past
   the threshold, slides off the bottom of the screen Sleeper-style. The hero is
   `touch-action:none` so the browser can't claim the gesture first.

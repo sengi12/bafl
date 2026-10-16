@@ -70,17 +70,22 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .table-scroll table{border-collapse:separate;border-spacing:0;}
 
 /* ── Page-scroll lock ────────────────────────────────────────────────────────
-   Applied to <html> while any overlay is open. Setting body{overflow:hidden} alone is not
-   enough on iOS: the backdrop still runs pull-to-refresh and rubber-band scroll behind the
-   overlay. Locking the root element and pairing it with overscroll-behavior on the overlay
-   itself is what actually stops both. overflow:hidden does not reset scrollTop, so the page
-   is exactly where it was when the overlay closes.
+   Applied to <html> while any overlay is open. The body is PINNED with position:fixed at the
+   offset the page was scrolled to (--pc-scroll-y, set by pcLockPage in 44-player-card.js):
+   the document has nothing left to scroll — on iOS too, where overflow:hidden alone is
+   ignored for touch and the backdrop would still run pull-to-refresh — and the page's layout
+   never changes height, so the scroll position survives intact. (The previous lock set
+   height:100% on html and body, which collapsed the document to one screen and made the
+   browser clamp the scroll position to 0 the moment anything opened; every roster or card
+   sent you back to the top.) Unlocking removes the class and scrolls back to the offset.
 
    This is the declarative half. The other half is the document-level touchmove guard in
    07-viewport-guard.js, which cancels any gesture that doesn't land in a genuinely scrollable
    region of the open overlay — the case CSS can't express, and the one that used to let the
    page creep behind a card on older iOS builds. */
-html.pc-locked,html.pc-locked body{overflow:hidden;height:100%;overscroll-behavior:none;}
+html.pc-locked{overflow:hidden;overscroll-behavior:none;}
+html.pc-locked body{position:fixed;top:var(--pc-scroll-y,0px);left:0;right:0;width:100%;
+  overflow:hidden;overscroll-behavior:none;}
 
 /* ── Toast ── */
 #toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom, 0px));
@@ -2850,11 +2855,33 @@ function closePlayerCard() {
   if (!rosterOpen) pcLockPage(false);
 }
 
-// While the card is open the page behind it must not scroll. Setting body.overflow alone
-// isn't enough on iOS — the browser will still run pull-to-refresh from the backdrop — so the
-// lock goes on <html> as a class and the CSS pairs it with overscroll-behavior:contain.
+// While an overlay is open the page behind it must not scroll — and must still be exactly
+// where it was when the overlay closes. The lock is a class on <html> whose CSS (00-base.css)
+// pins <body> with position:fixed at the page's current offset: the document can't scroll
+// (iOS included, where overflow:hidden alone is ignored for touch) and nothing about its
+// layout collapses, so there is no height change for the browser to clamp the scroll
+// position against. Unlocking puts the body back in flow and restores the offset in the
+// same task, before anything paints.
+//
+// Overlays stack (a card over a roster, a card over search) and each asks for the lock, so
+// the call is idempotent: only the first lock records the offset — once the body is fixed
+// the page reports scrollY 0, and recording that would lose the real position.
+let _pcScrollY = 0;
 function pcLockPage(on) {
-  try { document.documentElement.classList.toggle('pc-locked', !!on); } catch { /* no-op */ }
+  try {
+    const root = document.documentElement;
+    const locked = root.classList.contains('pc-locked');
+    if (!!on === locked) return;
+    if (on) {
+      _pcScrollY = window.scrollY || window.pageYOffset || (document.scrollingElement || root).scrollTop || 0;
+      root.style.setProperty('--pc-scroll-y', `-${Math.round(_pcScrollY)}px`);
+      root.classList.add('pc-locked');
+    } else {
+      root.classList.remove('pc-locked');
+      root.style.removeProperty('--pc-scroll-y');
+      window.scrollTo(0, _pcScrollY);
+    }
+  } catch { /* no DOM */ }
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && PC) closePlayerCard(); });
 
